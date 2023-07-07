@@ -21,26 +21,25 @@ const WIDTH: u32 = 32 * WIDTH_POINTS;
 const HEIGHT: u32 = 32 * HEIGHT_POINTS;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut level = Level::Normal(1);
+    let mut map = Map::Normal(1);
     let args = env::args().collect::<Vec<_>>();
     if args.len() > 1 {
         let arg = &args[1];
         let (type_str, num_str) = arg
             .split_once('-')
-            .ok_or_else(|| format!("Invalid level: {arg}"))?;
+            .ok_or_else(|| format!("Invalid map: {arg}"))?;
         let num: u32 = num_str.parse()?;
         match type_str {
-            "normal" => level = Level::Normal(num),
-            "egg" => level = Level::Egg(num),
-            _ => return Err(format!("Invalid level: {arg}").into()),
+            "normal" => map = Map::Normal(num),
+            "egg" => map = Map::Egg(num),
+            _ => return Err(format!("Invalid map: {arg}").into()),
         }
     }
-    let level_filename = match level {
-        Level::Normal(n) => format!("normal{:02}.blm", n),
-        Level::Egg(n) => format!("egg{:02}.blm", n),
+    let map_filename = match map {
+        Map::Normal(n) => format!("normal{:02}.blm", n),
+        Map::Egg(n) => format!("egg{:02}.blm", n),
     };
-    let level_data = fs::read(format!("assets/level/{level_filename}"))?.split_off(4);
-    let start_offset = level_data.iter().position(|tile| *tile == 0x15).unwrap() as u32;
+    let mut map_data = fs::read(format!("assets/level/{map_filename}"))?.split_off(4);
 
     let context = sdl2::init()?;
     let video_subsystem = context.video()?;
@@ -54,6 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut event_pump = context.event_pump()?;
 
     let assets = Assets::load_all(&texture_creator)?;
+    let start_offset = map_data.iter().position(|b| *b == 0x15).unwrap() as u32;
     let mut bobby = Bobby::new(0, (start_offset % 16, start_offset / 16));
 
     let mut frame: u32 = 0;
@@ -80,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     };
                     if let Some(state) = state_opt {
                         if !bobby.is_walking() {
-                            bobby.update_state(state, frame);
+                            bobby.update_state(state, frame, &map_data);
                         } else {
                             bobby.update_next_state(state, frame);
                         }
@@ -90,13 +90,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        let (bobby_texture, bobby_src, bobby_dest) = bobby.get_texture(frame, &assets);
+        let (bobby_texture, bobby_src, bobby_dest) =
+            bobby.get_texture(frame, &mut map_data, &assets);
 
         canvas.clear();
 
         for x in 0..WIDTH_POINTS {
             for y in 0..HEIGHT_POINTS {
-                let tile = level_data[y as usize * 16 + x as usize] as i32;
+                let tile = map_data[y as usize * 16 + x as usize] as i32;
                 canvas.copy_ex(
                     &assets.tileset_texture,
                     Some(Rect::new(32 * (tile % 8), 32 * (tile / 8), 32, 32)),
@@ -163,7 +164,7 @@ impl<'a> Assets<'a> {
 }
 
 #[derive(Debug)]
-enum Level {
+enum Map {
     Normal(u32),
     Egg(u32),
 }
@@ -197,7 +198,12 @@ impl Bobby {
         }
     }
 
-    fn get_texture<'a>(&'a mut self, frame: u32, assets: &'a Assets) -> (&'a Texture, Rect, Rect) {
+    fn get_texture<'a>(
+        &'a mut self,
+        frame: u32,
+        map_data: &mut [u8],
+        assets: &'a Assets,
+    ) -> (&'a Texture, Rect, Rect) {
         let delta_frame = frame - self.start_frame;
         let is_walking = self.coord_src != self.coord_dest;
         let step = delta_frame / FRAMES_PER_STEP;
@@ -307,7 +313,7 @@ impl Bobby {
             self.coord_src = self.coord_dest;
             self.start_frame = frame;
             if let Some(state) = self.next_state.take() {
-                self.update_state(state, frame);
+                self.update_state(state, frame, map_data);
             }
         }
         (texture, src, dest)
@@ -323,14 +329,15 @@ impl Bobby {
         }
     }
 
-    fn update_state(&mut self, state: State, frame: u32) {
+    fn update_state(&mut self, state: State, frame: u32, map_data: &[u8]) {
         println!("new state: {:?}", state);
         self.start_frame = frame;
         self.state = state;
-        self.update_dest();
+        self.update_dest(map_data);
     }
 
-    fn update_dest(&mut self) {
+    fn update_dest(&mut self, map_data: &[u8]) {
+        let old_dest = self.coord_dest;
         match self.state {
             State::Left => {
                 if self.coord_dest.0 > 0 {
@@ -353,6 +360,11 @@ impl Bobby {
                 }
             }
             _ => {}
+        }
+        let new_pos = self.coord_dest.0 + self.coord_dest.1 * 16;
+        // The target position is forbidden
+        if map_data[new_pos as usize] < 18 {
+            self.coord_dest = old_dest;
         }
     }
 }
