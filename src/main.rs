@@ -39,22 +39,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Map::Normal(n) => format!("normal{:02}.blm", n),
         Map::Egg(n) => format!("egg{:02}.blm", n),
     };
-    let mut map_data = fs::read(format!("assets/level/{map_filename}"))?.split_off(4);
+    let map_data_fresh = fs::read(format!("assets/level/{map_filename}"))?.split_off(4);
+    let mut map_data = map_data_fresh.clone();
+    let mut map_start: usize = 0;
+    let mut map_end: usize = 0;
+    let mut carrot_total: usize = 0;
+    for (idx, byte) in map_data.iter().enumerate() {
+        match byte {
+            19 => carrot_total += 1,
+            21 => map_start = idx,
+            44 => map_end = idx,
+            _ => {}
+        }
+    }
 
     let context = sdl2::init()?;
     let video_subsystem = context.video()?;
 
     let window = video_subsystem
         .window("Bobby Carrot", WIDTH, HEIGHT)
-        .resizable()
         .build()?;
     let mut canvas = window.into_canvas().present_vsync().build()?;
     let texture_creator = canvas.texture_creator();
     let mut event_pump = context.event_pump()?;
 
     let assets = Assets::load_all(&texture_creator)?;
-    let start_offset = map_data.iter().position(|b| *b == 0x15).unwrap() as u32;
-    let mut bobby = Bobby::new(0, (start_offset % 16, start_offset / 16));
+    let mut bobby = Bobby::new(0, (map_start as u32 % 16, map_start as u32 / 16));
 
     let mut frame: u32 = 0;
     'running: loop {
@@ -76,6 +86,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Keycode::Right => Some(State::Right),
                         Keycode::Up => Some(State::Up),
                         Keycode::Down => Some(State::Down),
+                        Keycode::R => {
+                            map_data = map_data_fresh.clone();
+                            bobby = Bobby::new(0, (map_start as u32 % 16, map_start as u32 / 16));
+                            None
+                        }
                         _ => None,
                     };
                     if let Some(state) = state_opt {
@@ -91,13 +106,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let (bobby_texture, bobby_src, bobby_dest) =
-            bobby.get_texture(frame, &mut map_data, &assets);
+            bobby.get_texture(frame, &mut map_data, carrot_total, map_end, &assets);
 
         canvas.clear();
 
         for x in 0..WIDTH_POINTS {
             for y in 0..HEIGHT_POINTS {
-                let tile = map_data[y as usize * 16 + x as usize] as i32;
+                let tile = map_data[x as usize + y as usize * 16] as i32;
                 canvas.copy_ex(
                     &assets.tileset_texture,
                     Some(Rect::new(32 * (tile % 8), 32 * (tile / 8), 32, 32)),
@@ -176,9 +191,10 @@ struct Bobby {
     start_frame: u32,
     coord_src: (u32, u32),
     coord_dest: (u32, u32),
+    carrot_count: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 enum State {
     Idle,
     Left,
@@ -195,6 +211,7 @@ impl Bobby {
             start_frame,
             coord_src,
             coord_dest: coord_src,
+            carrot_count: 0,
         }
     }
 
@@ -202,6 +219,8 @@ impl Bobby {
         &'a mut self,
         frame: u32,
         map_data: &mut [u8],
+        carrot_total: usize,
+        map_end: usize,
         assets: &'a Assets,
     ) -> (&'a Texture, Rect, Rect) {
         let delta_frame = frame - self.start_frame;
@@ -310,6 +329,73 @@ impl Bobby {
             }
         };
         if step == 8 && is_walking {
+            let old_pos = (self.coord_src.0 + self.coord_src.1 * 16) as usize;
+            let new_pos = (self.coord_dest.0 + self.coord_dest.1 * 16) as usize;
+            match map_data[old_pos] {
+                24 => map_data[old_pos] = 25,
+                25 => map_data[old_pos] = 26,
+                26 => map_data[old_pos] = 27,
+                27 => map_data[old_pos] = 24,
+                28 => map_data[old_pos] = 29,
+                29 => map_data[old_pos] = 28,
+                30 => map_data[old_pos] = 31,
+                _ => {
+                    // TODO
+                }
+            }
+            match map_data[new_pos] {
+                // get carrot
+                19 => {
+                    map_data[new_pos] = 20;
+                    self.carrot_count += 1;
+                }
+                // red switch
+                22 => {
+                    for x in 0..WIDTH_POINTS {
+                        for y in 0..HEIGHT_POINTS {
+                            let pos = x as usize + y as usize * 16;
+                            match map_data[pos] {
+                                // switch
+                                22 => map_data[pos] = 23,
+                                23 => map_data[pos] = 22,
+                                // right angle
+                                24 => map_data[pos] = 25,
+                                25 => map_data[pos] = 26,
+                                26 => map_data[pos] = 27,
+                                27 => map_data[pos] = 24,
+                                // line
+                                28 => map_data[pos] = 29,
+                                29 => map_data[pos] = 28,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                // dead
+                31 => {}
+                // yellow switch
+                38 => {
+                    for x in 0..WIDTH_POINTS {
+                        for y in 0..HEIGHT_POINTS {
+                            let pos = x as usize + y as usize * 16;
+                            match map_data[pos] {
+                                // switch
+                                38 => map_data[pos] = 39,
+                                39 => map_data[pos] = 38,
+                                // left / right
+                                40 => map_data[pos] = 41,
+                                41 => map_data[pos] = 40,
+                                // up / down
+                                42 => map_data[pos] = 43,
+                                43 => map_data[pos] = 42,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+
             self.coord_src = self.coord_dest;
             self.start_frame = frame;
             if let Some(state) = self.next_state.take() {
@@ -361,9 +447,32 @@ impl Bobby {
             }
             _ => {}
         }
-        let new_pos = self.coord_dest.0 + self.coord_dest.1 * 16;
+
+        let old_pos = (self.coord_src.0 + self.coord_src.1 * 16) as usize;
+        let new_pos = (self.coord_dest.0 + self.coord_dest.1 * 16) as usize;
+        let old_item = map_data[old_pos];
+        let new_item = map_data[new_pos];
         // The target position is forbidden
-        if map_data[new_pos as usize] < 18 {
+        if new_item < 18
+            // stop by sibling item
+            || (new_item == 24 && (self.state == State::Right || self.state == State::Down))
+            || (new_item == 25 && (self.state == State::Left || self.state == State::Down))
+            || (new_item == 26 && (self.state == State::Left || self.state == State::Up))
+            || (new_item == 27 && (self.state == State::Right || self.state == State::Up))
+            || ((new_item == 28 || new_item == 40 || new_item == 41)
+                && (self.state == State::Up || self.state == State::Down))
+            || ((new_item == 29 || new_item == 42 || new_item == 43)
+                && (self.state == State::Left || self.state == State::Right))
+            // stop by current item
+            || (old_item == 24 && (self.state == State::Left || self.state == State::Up))
+            || (old_item == 25 && (self.state == State::Right || self.state == State::Up))
+            || (old_item == 26 && (self.state == State::Right || self.state == State::Down))
+            || (old_item == 27 && (self.state == State::Left || self.state == State::Down))
+            || ((old_item == 28 || old_item == 40 || old_item == 41)
+                && (self.state == State::Up || self.state == State::Down))
+            || ((old_item == 29 || old_item == 42 || old_item == 43)
+                && (self.state == State::Left || self.state == State::Right))
+        {
             self.coord_dest = old_dest;
         }
     }
