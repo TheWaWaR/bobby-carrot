@@ -1,3 +1,5 @@
+use std::env;
+use std::fs;
 use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
@@ -13,12 +15,33 @@ use sdl2::{
 const FRAMES: u64 = 60;
 const MS_PER_FRAME: u64 = 1000 / FRAMES;
 const FRAMES_PER_STEP: u32 = 2;
-const WIDTH_POINTS: u32 = 8;
-const HEIGHT_POINTS: u32 = 10;
+const WIDTH_POINTS: u32 = 16;
+const HEIGHT_POINTS: u32 = 16;
 const WIDTH: u32 = 32 * WIDTH_POINTS;
 const HEIGHT: u32 = 32 * HEIGHT_POINTS;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut level = Level::Normal(1);
+    let args = env::args().collect::<Vec<_>>();
+    if args.len() > 1 {
+        let arg = &args[1];
+        let (type_str, num_str) = arg
+            .split_once('-')
+            .ok_or_else(|| format!("Invalid level: {arg}"))?;
+        let num: u32 = num_str.parse()?;
+        match type_str {
+            "normal" => level = Level::Normal(num),
+            "egg" => level = Level::Egg(num),
+            _ => return Err(format!("Invalid level: {arg}").into()),
+        }
+    }
+    let level_filename = match level {
+        Level::Normal(n) => format!("normal{:02}.blm", n),
+        Level::Egg(n) => format!("egg{:02}.blm", n),
+    };
+    let level_data = fs::read(format!("assets/level/{level_filename}"))?.split_off(4);
+    let start_offset = level_data.iter().position(|tile| *tile == 0x15).unwrap() as u32;
+
     let context = sdl2::init()?;
     let video_subsystem = context.video()?;
 
@@ -31,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut event_pump = context.event_pump()?;
 
     let assets = Assets::load_all(&texture_creator)?;
-    let mut bobby = Bobby::new(0, (WIDTH_POINTS / 2 - 1, HEIGHT_POINTS / 2));
+    let mut bobby = Bobby::new(0, (start_offset % 16, start_offset / 16));
 
     let mut frame: u32 = 0;
     'running: loop {
@@ -57,10 +80,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     };
                     if let Some(state) = state_opt {
                         if !bobby.is_walking() {
-                            println!("new state: {:?}", state);
-                            bobby.start_frame = frame;
-                            bobby.state = state;
-                            bobby.update_dest();
+                            bobby.update_state(state, frame);
+                        } else {
+                            bobby.update_next_state(state, frame);
                         }
                     }
                 }
@@ -74,9 +96,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         for x in 0..WIDTH_POINTS {
             for y in 0..HEIGHT_POINTS {
+                let tile = level_data[y as usize * 16 + x as usize] as i32;
                 canvas.copy_ex(
                     &assets.tileset_texture,
-                    Some(Rect::new(32 * 5, 32 * 2, 32, 32)),
+                    Some(Rect::new(32 * (tile % 8), 32 * (tile / 8), 32, 32)),
                     Some(Rect::new(32 * x as i32, 32 * y as i32, 32, 32)),
                     0.0,
                     None,
@@ -140,8 +163,15 @@ impl<'a> Assets<'a> {
 }
 
 #[derive(Debug)]
+enum Level {
+    Normal(u32),
+    Egg(u32),
+}
+
+#[derive(Debug)]
 struct Bobby {
     state: State,
+    next_state: Option<State>,
     start_frame: u32,
     coord_src: (u32, u32),
     coord_dest: (u32, u32),
@@ -160,6 +190,7 @@ impl Bobby {
     pub fn new(start_frame: u32, coord_src: (u32, u32)) -> Bobby {
         Bobby {
             state: State::Down,
+            next_state: None,
             start_frame,
             coord_src,
             coord_dest: coord_src,
@@ -171,39 +202,37 @@ impl Bobby {
         let is_walking = self.coord_src != self.coord_dest;
         let step = delta_frame / FRAMES_PER_STEP;
         // println!("frame: {frame}, step: {step}, bobby: {:?}", self);
-        match self.state {
+        let (texture, src, dest) = match self.state {
             State::Idle => {
                 let step_idle = step % 3;
                 let src = Rect::new(36 * step_idle as i32, 0, 36, 50);
                 let dest = Rect::new(
                     self.coord_src.0 as i32 * 32 + 16 - (36 / 2),
-                    self.coord_src.1 as i32 * 32 - 16 - (50 - 32 / 2),
+                    self.coord_src.1 as i32 * 32 + 16 - (50 - 32 / 2),
                     36,
                     50,
                 );
-                (&assets.bobby_idle_texture, src, dest)
+                return (&assets.bobby_idle_texture, src, dest);
             }
             State::Left => {
                 let (src_x, dest_x, dest_y) = if is_walking {
                     (
                         36 * ((step + 7) % 8) as i32,
                         (self.coord_src.0 as i32 * 8 - step as i32) * 32 / 8 + 16 - (36 / 2),
-                        self.coord_src.1 as i32 * 32 - 16 - (50 - 32 / 2),
+                        self.coord_src.1 as i32 * 32 + 16 - (50 - 32 / 2),
                     )
                 } else {
                     (
                         36 * 7,
                         self.coord_src.0 as i32 * 32 + 16 - (36 / 2),
-                        self.coord_src.1 as i32 * 32 - 16 - (50 - 32 / 2),
+                        self.coord_src.1 as i32 * 32 + 16 - (50 - 32 / 2),
                     )
                 };
                 let src = Rect::new(src_x, 0, 36, 50);
                 let dest = Rect::new(dest_x, dest_y, 36, 50);
-                if step == 8 && is_walking {
+                if is_walking {
                     assert_eq!(self.coord_src.0, self.coord_dest.0 + 1);
                     assert_eq!(self.coord_src.1, self.coord_dest.1);
-                    self.coord_src = self.coord_dest;
-                    self.start_frame = frame;
                 }
                 (&assets.bobby_left_texture, src, dest)
             }
@@ -212,22 +241,20 @@ impl Bobby {
                     (
                         36 * ((step + 7) % 8) as i32,
                         (self.coord_src.0 as i32 * 8 + step as i32) * 32 / 8 + 16 - (36 / 2),
-                        self.coord_src.1 as i32 * 32 - 16 - (50 - 32 / 2),
+                        self.coord_src.1 as i32 * 32 + 16 - (50 - 32 / 2),
                     )
                 } else {
                     (
                         36 * 7,
                         self.coord_src.0 as i32 * 32 + 16 - (36 / 2),
-                        self.coord_src.1 as i32 * 32 - 16 - (50 - 32 / 2),
+                        self.coord_src.1 as i32 * 32 + 16 - (50 - 32 / 2),
                     )
                 };
                 let src = Rect::new(src_x, 0, 36, 50);
                 let dest = Rect::new(dest_x, dest_y, 36, 50);
-                if step == 8 && is_walking {
+                if is_walking {
                     assert_eq!(self.coord_src.0 + 1, self.coord_dest.0);
                     assert_eq!(self.coord_src.1, self.coord_dest.1);
-                    self.coord_src = self.coord_dest;
-                    self.start_frame = frame;
                 }
                 (&assets.bobby_right_texture, src, dest)
             }
@@ -236,22 +263,20 @@ impl Bobby {
                     (
                         36 * ((step + 7) % 8) as i32,
                         self.coord_src.0 as i32 * 32 + 16 - (36 / 2),
-                        (self.coord_src.1 as i32 * 8 - step as i32) * 32 / 8 - 16 - (50 - 32 / 2),
+                        (self.coord_src.1 as i32 * 8 - step as i32) * 32 / 8 + 16 - (50 - 32 / 2),
                     )
                 } else {
                     (
                         36 * 7,
                         self.coord_src.0 as i32 * 32 + 16 - (36 / 2),
-                        self.coord_src.1 as i32 * 32 - 16 - (50 - 32 / 2),
+                        self.coord_src.1 as i32 * 32 + 16 - (50 - 32 / 2),
                     )
                 };
                 let src = Rect::new(src_x, 0, 36, 50);
                 let dest = Rect::new(dest_x, dest_y, 36, 50);
-                if step == 8 && is_walking {
+                if is_walking {
                     assert_eq!(self.coord_src.0, self.coord_dest.0);
                     assert_eq!(self.coord_src.1, self.coord_dest.1 + 1);
-                    self.coord_src = self.coord_dest;
-                    self.start_frame = frame;
                 }
                 (&assets.bobby_up_texture, src, dest)
             }
@@ -260,30 +285,49 @@ impl Bobby {
                     (
                         36 * ((step + 7) % 8) as i32,
                         self.coord_src.0 as i32 * 32 + 16 - (36 / 2),
-                        (self.coord_src.1 as i32 * 8 + step as i32) * 32 / 8 - 16 - (50 - 32 / 2),
+                        (self.coord_src.1 as i32 * 8 + step as i32) * 32 / 8 + 16 - (50 - 32 / 2),
                     )
                 } else {
                     (
                         36 * 7,
                         self.coord_src.0 as i32 * 32 + 16 - (36 / 2),
-                        self.coord_src.1 as i32 * 32 - 16 - (50 - 32 / 2),
+                        self.coord_src.1 as i32 * 32 + 16 - (50 - 32 / 2),
                     )
                 };
                 let src = Rect::new(src_x, 0, 36, 50);
                 let dest = Rect::new(dest_x, dest_y, 36, 50);
-                if step == 8 && is_walking {
+                if is_walking {
                     assert_eq!(self.coord_src.0, self.coord_dest.0);
                     assert_eq!(self.coord_src.1 + 1, self.coord_dest.1);
-                    self.coord_src = self.coord_dest;
-                    self.start_frame = frame;
                 }
                 (&assets.bobby_down_texture, src, dest)
             }
+        };
+        if step == 8 && is_walking {
+            self.coord_src = self.coord_dest;
+            self.start_frame = frame;
+            if let Some(state) = self.next_state.take() {
+                self.update_state(state, frame);
+            }
         }
+        (texture, src, dest)
     }
 
     fn is_walking(&self) -> bool {
         self.coord_src != self.coord_dest
+    }
+
+    fn update_next_state(&mut self, state: State, frame: u32) {
+        if (frame - self.start_frame) / FRAMES_PER_STEP > 3 {
+            self.next_state = Some(state);
+        }
+    }
+
+    fn update_state(&mut self, state: State, frame: u32) {
+        println!("new state: {:?}", state);
+        self.start_frame = frame;
+        self.state = state;
+        self.update_dest();
     }
 
     fn update_dest(&mut self) {
@@ -299,12 +343,12 @@ impl Bobby {
                 }
             }
             State::Up => {
-                if self.coord_dest.1 > 1 {
+                if self.coord_dest.1 > 0 {
                     self.coord_dest.1 -= 1;
                 }
             }
             State::Down => {
-                if self.coord_dest.1 < HEIGHT_POINTS {
+                if self.coord_dest.1 < HEIGHT_POINTS - 1 {
                     self.coord_dest.1 += 1;
                 }
             }
