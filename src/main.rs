@@ -1,4 +1,5 @@
 use std::env;
+use std::fmt;
 use std::fs;
 use std::path::Path;
 use std::thread::sleep;
@@ -35,27 +36,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => return Err(format!("Invalid map: {arg}").into()),
         }
     }
-    let map_filename = match map {
-        Map::Normal(n) => format!("normal{:02}.blm", n),
-        Map::Egg(n) => format!("egg{:02}.blm", n),
-    };
-    let map_data_fresh = fs::read(format!("assets/level/{map_filename}"))?.split_off(4);
+    let (mut map_data_fresh, mut map_start, mut carrot_total) = map.load_map_data()?;
     let mut map_data = map_data_fresh.clone();
-    let mut map_start: usize = 0;
-    let mut carrot_total: usize = 0;
-    for (idx, byte) in map_data.iter().enumerate() {
-        match byte {
-            19 => carrot_total += 1,
-            21 => map_start = idx,
-            _ => {}
-        }
-    }
 
     let context = sdl2::init()?;
     let video_subsystem = context.video()?;
 
     let window = video_subsystem
-        .window("Bobby Carrot", WIDTH, HEIGHT)
+        .window(format!("Bobby Carrot ({})", map).as_str(), WIDTH, HEIGHT)
         .build()?;
     let mut canvas = window.into_canvas().present_vsync().build()?;
     let texture_creator = canvas.texture_creator();
@@ -89,6 +77,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             bobby = Bobby::new(0, (map_start as u32 % 16, map_start as u32 / 16));
                             None
                         }
+                        Keycode::N => {
+                            map = map.next();
+                            canvas
+                                .window_mut()
+                                .set_title(format!("Bobby Carrot ({})", map).as_str())?;
+                            (map_data_fresh, map_start, carrot_total) = map.load_map_data()?;
+                            map_data = map_data_fresh.clone();
+                            bobby = Bobby::new(0, (map_start as u32 % 16, map_start as u32 / 16));
+                            None
+                        }
+                        Keycode::P => {
+                            map = map.previous();
+                            canvas
+                                .window_mut()
+                                .set_title(format!("Bobby Carrot ({})", map).as_str())?;
+                            (map_data_fresh, map_start, carrot_total) = map.load_map_data()?;
+                            map_data = map_data_fresh.clone();
+                            bobby = Bobby::new(0, (map_start as u32 % 16, map_start as u32 / 16));
+                            None
+                        }
                         _ => None,
                     };
                     if let Some(state) = state_opt {
@@ -101,6 +109,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 _ => {}
             }
+        }
+
+        // Finished and hit the end position
+        if bobby.carrot_count == carrot_total
+            && map_data[(bobby.coord_src.0 + bobby.coord_src.1 * 16) as usize] == 44
+        {
+            map = map.next();
+            canvas
+                .window_mut()
+                .set_title(format!("Bobby Carrot ({})", map).as_str())?;
+            (map_data_fresh, map_start, carrot_total) = map.load_map_data()?;
+            map_data = map_data_fresh.clone();
+            bobby = Bobby::new(0, (map_start as u32 % 16, map_start as u32 / 16));
         }
 
         let (bobby_src, bobby_dest) = bobby.update_texture_position(frame, &mut map_data);
@@ -121,6 +142,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let (texture, src) = if item == 44 && finished {
                     (
                         &assets.tile_finish_texture,
+                        Rect::new(32 * ((frame as i32 / (FRAMES as i32 / 10)) % 4), 0, 32, 32),
+                    )
+                } else if item == 40 {
+                    (
+                        &assets.tile_conveyor_left_texture,
+                        Rect::new(32 * ((frame as i32 / (FRAMES as i32 / 10)) % 4), 0, 32, 32),
+                    )
+                } else if item == 41 {
+                    (
+                        &assets.tile_conveyor_right_texture,
+                        Rect::new(32 * ((frame as i32 / (FRAMES as i32 / 10)) % 4), 0, 32, 32),
+                    )
+                } else if item == 42 {
+                    (
+                        &assets.tile_conveyor_up_texture,
+                        Rect::new(32 * ((frame as i32 / (FRAMES as i32 / 10)) % 4), 0, 32, 32),
+                    )
+                } else if item == 43 {
+                    (
+                        &assets.tile_conveyor_down_texture,
                         Rect::new(32 * ((frame as i32 / (FRAMES as i32 / 10)) % 4), 0, 32, 32),
                     )
                 } else {
@@ -164,6 +205,10 @@ struct Assets<'a> {
     bobby_right_texture: Texture<'a>,
     bobby_up_texture: Texture<'a>,
     bobby_down_texture: Texture<'a>,
+    tile_conveyor_left_texture: Texture<'a>,
+    tile_conveyor_right_texture: Texture<'a>,
+    tile_conveyor_up_texture: Texture<'a>,
+    tile_conveyor_down_texture: Texture<'a>,
     tileset_texture: Texture<'a>,
     tile_finish_texture: Texture<'a>,
 }
@@ -182,6 +227,15 @@ impl<'a> Assets<'a> {
             texture_creator.load_texture(Path::new("assets/image/bobby_up.png"))?;
         let bobby_down_texture =
             texture_creator.load_texture(Path::new("assets/image/bobby_down.png"))?;
+
+        let tile_conveyor_left_texture =
+            texture_creator.load_texture(Path::new("assets/image/tile_conveyor_left.png"))?;
+        let tile_conveyor_right_texture =
+            texture_creator.load_texture(Path::new("assets/image/tile_conveyor_right.png"))?;
+        let tile_conveyor_up_texture =
+            texture_creator.load_texture(Path::new("assets/image/tile_conveyor_up.png"))?;
+        let tile_conveyor_down_texture =
+            texture_creator.load_texture(Path::new("assets/image/tile_conveyor_down.png"))?;
         let tileset_texture =
             texture_creator.load_texture(Path::new("assets/image/tileset.png"))?;
         let tile_finish_texture =
@@ -192,16 +246,72 @@ impl<'a> Assets<'a> {
             bobby_right_texture,
             bobby_up_texture,
             bobby_down_texture,
+            tile_conveyor_left_texture,
+            tile_conveyor_right_texture,
+            tile_conveyor_up_texture,
+            tile_conveyor_down_texture,
             tileset_texture,
             tile_finish_texture,
         })
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Map {
     Normal(u32),
     Egg(u32),
+}
+
+impl fmt::Display for Map {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Map::Normal(n) => write!(f, "Normal-{:02}", n),
+            Map::Egg(n) => write!(f, "Egg-{:02}", n),
+        }
+    }
+}
+
+impl Map {
+    fn load_map_data(&self) -> Result<(Vec<u8>, usize, usize), Box<dyn std::error::Error>> {
+        let map_filename = match self {
+            Map::Normal(n) => format!("normal{:02}.blm", n),
+            Map::Egg(n) => format!("egg{:02}.blm", n),
+        };
+        let filename = format!("assets/level/{map_filename}");
+        let data = fs::read(&filename)
+            .map_err(|err| format!("load level file '{}' failed: {}", filename, err))?
+            .split_off(4);
+        let mut map_start: usize = 0;
+        let mut carrot_total: usize = 0;
+        for (idx, byte) in data.iter().enumerate() {
+            match byte {
+                19 => carrot_total += 1,
+                21 => map_start = idx,
+                _ => {}
+            }
+        }
+        Ok((data, map_start, carrot_total))
+    }
+
+    fn next(self) -> Map {
+        match self {
+            Map::Normal(n) if n < 30 => Map::Normal(n + 1),
+            Map::Normal(n) if n >= 30 => Map::Egg(1),
+            Map::Egg(n) if n < 20 => Map::Egg(n + 1),
+            Map::Egg(n) if n >= 20 => Map::Normal(1),
+            _ => Map::Normal(1),
+        }
+    }
+
+    fn previous(self) -> Map {
+        match self {
+            Map::Normal(n) if n <= 1 => Map::Egg(20),
+            Map::Normal(n) if n > 1 => Map::Normal(n - 1),
+            Map::Egg(n) if n <= 1 => Map::Normal(30),
+            Map::Egg(n) if n > 1 => Map::Egg(n - 1),
+            _ => Map::Normal(1),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -468,6 +578,9 @@ impl Bobby {
         let new_item = map_data[new_pos];
         // The target position is forbidden
         if new_item < 18
+            || new_item == 31 // TODO: dead, remove this later
+            // lock
+            || new_item == 33 || new_item == 35 || new_item == 37
             // stop by sibling item
             || (new_item == 24 && (self.state == State::Right || self.state == State::Down))
             || (new_item == 25 && (self.state == State::Left || self.state == State::Down))
@@ -477,6 +590,11 @@ impl Bobby {
                 && (self.state == State::Up || self.state == State::Down))
             || ((new_item == 29 || new_item == 42 || new_item == 43)
                 && (self.state == State::Left || self.state == State::Right))
+        // stop by flow
+            || (new_item == 40 && self.state == State::Right)
+            || (new_item == 41 && self.state == State::Left)
+            || (new_item == 42 && self.state == State::Down)
+            || (new_item == 43 && self.state == State::Up)
             // stop by current item
             || (old_item == 24 && (self.state == State::Left || self.state == State::Up))
             || (old_item == 25 && (self.state == State::Right || self.state == State::Up))
