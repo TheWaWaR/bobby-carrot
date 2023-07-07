@@ -42,13 +42,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let map_data_fresh = fs::read(format!("assets/level/{map_filename}"))?.split_off(4);
     let mut map_data = map_data_fresh.clone();
     let mut map_start: usize = 0;
-    let mut map_end: usize = 0;
     let mut carrot_total: usize = 0;
     for (idx, byte) in map_data.iter().enumerate() {
         match byte {
             19 => carrot_total += 1,
             21 => map_start = idx,
-            44 => map_end = idx,
             _ => {}
         }
     }
@@ -105,17 +103,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        let (bobby_texture, bobby_src, bobby_dest) =
-            bobby.get_texture(frame, &mut map_data, carrot_total, map_end, &assets);
+        let (bobby_src, bobby_dest) = bobby.update_texture_position(frame, &mut map_data);
+        let bobby_texture = match bobby.state {
+            State::Idle => &assets.bobby_idle_texture,
+            State::Left => &assets.bobby_left_texture,
+            State::Right => &assets.bobby_right_texture,
+            State::Up => &assets.bobby_up_texture,
+            State::Down => &assets.bobby_down_texture,
+        };
+        let finished = bobby.carrot_count == carrot_total;
 
         canvas.clear();
 
         for x in 0..WIDTH_POINTS {
             for y in 0..HEIGHT_POINTS {
-                let tile = map_data[x as usize + y as usize * 16] as i32;
+                let item = map_data[x as usize + y as usize * 16] as i32;
+                let (texture, src) = if item == 44 && finished {
+                    (
+                        &assets.tile_finish_texture,
+                        Rect::new(32 * ((frame as i32 / (FRAMES as i32 / 10)) % 4), 0, 32, 32),
+                    )
+                } else {
+                    (
+                        &assets.tileset_texture,
+                        Rect::new(32 * (item % 8), 32 * (item / 8), 32, 32),
+                    )
+                };
                 canvas.copy_ex(
-                    &assets.tileset_texture,
-                    Some(Rect::new(32 * (tile % 8), 32 * (tile / 8), 32, 32)),
+                    texture,
+                    Some(src),
                     Some(Rect::new(32 * x as i32, 32 * y as i32, 32, 32)),
                     0.0,
                     None,
@@ -149,6 +165,7 @@ struct Assets<'a> {
     bobby_up_texture: Texture<'a>,
     bobby_down_texture: Texture<'a>,
     tileset_texture: Texture<'a>,
+    tile_finish_texture: Texture<'a>,
 }
 
 impl<'a> Assets<'a> {
@@ -167,6 +184,8 @@ impl<'a> Assets<'a> {
             texture_creator.load_texture(Path::new("assets/image/bobby_down.png"))?;
         let tileset_texture =
             texture_creator.load_texture(Path::new("assets/image/tileset.png"))?;
+        let tile_finish_texture =
+            texture_creator.load_texture(Path::new("assets/image/tile_finish.png"))?;
         Ok(Assets {
             bobby_idle_texture,
             bobby_left_texture,
@@ -174,6 +193,7 @@ impl<'a> Assets<'a> {
             bobby_up_texture,
             bobby_down_texture,
             tileset_texture,
+            tile_finish_texture,
         })
     }
 }
@@ -215,19 +235,12 @@ impl Bobby {
         }
     }
 
-    fn get_texture<'a>(
-        &'a mut self,
-        frame: u32,
-        map_data: &mut [u8],
-        carrot_total: usize,
-        map_end: usize,
-        assets: &'a Assets,
-    ) -> (&'a Texture, Rect, Rect) {
+    fn update_texture_position(&mut self, frame: u32, map_data: &mut [u8]) -> (Rect, Rect) {
         let delta_frame = frame - self.start_frame;
         let is_walking = self.coord_src != self.coord_dest;
         let step = delta_frame / FRAMES_PER_STEP;
         // println!("frame: {frame}, step: {step}, bobby: {:?}", self);
-        let (texture, src, dest) = match self.state {
+        let (src, dest) = match self.state {
             State::Idle => {
                 let step_idle = step % 3;
                 let src = Rect::new(36 * step_idle as i32, 0, 36, 50);
@@ -237,7 +250,7 @@ impl Bobby {
                     36,
                     50,
                 );
-                return (&assets.bobby_idle_texture, src, dest);
+                return (src, dest);
             }
             State::Left => {
                 let (src_x, dest_x, dest_y) = if is_walking {
@@ -259,7 +272,7 @@ impl Bobby {
                     assert_eq!(self.coord_src.0, self.coord_dest.0 + 1);
                     assert_eq!(self.coord_src.1, self.coord_dest.1);
                 }
-                (&assets.bobby_left_texture, src, dest)
+                (src, dest)
             }
             State::Right => {
                 let (src_x, dest_x, dest_y) = if is_walking {
@@ -281,7 +294,7 @@ impl Bobby {
                     assert_eq!(self.coord_src.0 + 1, self.coord_dest.0);
                     assert_eq!(self.coord_src.1, self.coord_dest.1);
                 }
-                (&assets.bobby_right_texture, src, dest)
+                (src, dest)
             }
             State::Up => {
                 let (src_x, dest_x, dest_y) = if is_walking {
@@ -303,7 +316,7 @@ impl Bobby {
                     assert_eq!(self.coord_src.0, self.coord_dest.0);
                     assert_eq!(self.coord_src.1, self.coord_dest.1 + 1);
                 }
-                (&assets.bobby_up_texture, src, dest)
+                (src, dest)
             }
             State::Down => {
                 let (src_x, dest_x, dest_y) = if is_walking {
@@ -325,9 +338,10 @@ impl Bobby {
                     assert_eq!(self.coord_src.0, self.coord_dest.0);
                     assert_eq!(self.coord_src.1 + 1, self.coord_dest.1);
                 }
-                (&assets.bobby_down_texture, src, dest)
+                (src, dest)
             }
         };
+
         if step == 8 && is_walking {
             let old_pos = (self.coord_src.0 + self.coord_src.1 * 16) as usize;
             let new_pos = (self.coord_dest.0 + self.coord_dest.1 * 16) as usize;
@@ -371,7 +385,7 @@ impl Bobby {
                         }
                     }
                 }
-                // dead
+                // TODO: dead
                 31 => {}
                 // yellow switch
                 38 => {
@@ -402,7 +416,7 @@ impl Bobby {
                 self.update_state(state, frame, map_data);
             }
         }
-        (texture, src, dest)
+        (src, dest)
     }
 
     fn is_walking(&self) -> bool {
