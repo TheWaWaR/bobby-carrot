@@ -1,7 +1,5 @@
 use std::env;
 use std::fmt;
-use std::fs;
-use std::path::Path;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -452,36 +450,38 @@ impl<'a> Assets<'a> {
         texture_creator: &'a TextureCreator<T>,
     ) -> Result<Assets<'a>, Box<dyn std::error::Error>> {
         let bobby_idle_texture =
-            texture_creator.load_texture(Path::new("assets/image/bobby_idle.png"))?;
+            texture_creator.load_texture_bytes(include_bytes!("assets/image/bobby_idle.png"))?;
         let bobby_death_texture =
-            texture_creator.load_texture(Path::new("assets/image/bobby_death.png"))?;
+            texture_creator.load_texture_bytes(include_bytes!("assets/image/bobby_death.png"))?;
         let bobby_fade_texture =
-            texture_creator.load_texture(Path::new("assets/image/bobby_fade.png"))?;
+            texture_creator.load_texture_bytes(include_bytes!("assets/image/bobby_fade.png"))?;
         let bobby_left_texture =
-            texture_creator.load_texture(Path::new("assets/image/bobby_left.png"))?;
+            texture_creator.load_texture_bytes(include_bytes!("assets/image/bobby_left.png"))?;
         let bobby_right_texture =
-            texture_creator.load_texture(Path::new("assets/image/bobby_right.png"))?;
+            texture_creator.load_texture_bytes(include_bytes!("assets/image/bobby_right.png"))?;
         let bobby_up_texture =
-            texture_creator.load_texture(Path::new("assets/image/bobby_up.png"))?;
+            texture_creator.load_texture_bytes(include_bytes!("assets/image/bobby_up.png"))?;
         let bobby_down_texture =
-            texture_creator.load_texture(Path::new("assets/image/bobby_down.png"))?;
+            texture_creator.load_texture_bytes(include_bytes!("assets/image/bobby_down.png"))?;
 
-        let tile_conveyor_left_texture =
-            texture_creator.load_texture(Path::new("assets/image/tile_conveyor_left.png"))?;
-        let tile_conveyor_right_texture =
-            texture_creator.load_texture(Path::new("assets/image/tile_conveyor_right.png"))?;
-        let tile_conveyor_up_texture =
-            texture_creator.load_texture(Path::new("assets/image/tile_conveyor_up.png"))?;
-        let tile_conveyor_down_texture =
-            texture_creator.load_texture(Path::new("assets/image/tile_conveyor_down.png"))?;
+        let tile_conveyor_left_texture = texture_creator
+            .load_texture_bytes(include_bytes!("assets/image/tile_conveyor_left.png"))?;
+        let tile_conveyor_right_texture = texture_creator
+            .load_texture_bytes(include_bytes!("assets/image/tile_conveyor_right.png"))?;
+        let tile_conveyor_up_texture = texture_creator
+            .load_texture_bytes(include_bytes!("assets/image/tile_conveyor_up.png"))?;
+        let tile_conveyor_down_texture = texture_creator
+            .load_texture_bytes(include_bytes!("assets/image/tile_conveyor_down.png"))?;
         let tileset_texture =
-            texture_creator.load_texture(Path::new("assets/image/tileset.png"))?;
+            texture_creator.load_texture_bytes(include_bytes!("assets/image/tileset.png"))?;
         let tile_finish_texture =
-            texture_creator.load_texture(Path::new("assets/image/tile_finish.png"))?;
-        let hud_texture = texture_creator.load_texture(Path::new("assets/image/hud.png"))?;
+            texture_creator.load_texture_bytes(include_bytes!("assets/image/tile_finish.png"))?;
+        let hud_texture =
+            texture_creator.load_texture_bytes(include_bytes!("assets/image/hud.png"))?;
         let numbers_texture =
-            texture_creator.load_texture(Path::new("assets/image/numbers.png"))?;
-        let help_texture = texture_creator.load_texture(Path::new("assets/image/help.png"))?;
+            texture_creator.load_texture_bytes(include_bytes!("assets/image/numbers.png"))?;
+        let help_texture =
+            texture_creator.load_texture_bytes(include_bytes!("assets/image/help.png"))?;
         Ok(Assets {
             bobby_idle_texture,
             bobby_death_texture,
@@ -528,14 +528,61 @@ impl fmt::Display for Map {
 
 impl Map {
     fn load_map_info(&self) -> Result<MapInfo, Box<dyn std::error::Error>> {
-        let map_filename = match self {
-            Map::Normal(n) => format!("normal{:02}.blm", n),
-            Map::Egg(n) => format!("egg{:02}.blm", n),
+        let data = match self {
+            Map::Normal(1) => include_bytes!("assets/level/normal01.blm"),
+            Map::Normal(2) => include_bytes!("assets/level/normal02.blm"),
+            Map::Normal(3) => include_bytes!("assets/level/normal03.blm"),
+            Map::Normal(4) => include_bytes!("assets/level/normal04.blm"),
+            Map::Normal(5) => include_bytes!("assets/level/normal05.blm"),
+            Map::Normal(6) => include_bytes!("assets/level/normal06.blm"),
+            Map::Normal(7) => include_bytes!("assets/level/normal07.blm"),
+            Map::Normal(8) => include_bytes!("assets/level/normal08.blm"),
+            Map::Normal(9) => include_bytes!("assets/level/normal09.blm"),
+            Map::Normal(10) => include_bytes!("assets/level/normal10.blm"),
+            Map::Normal(11) => include_bytes!("assets/level/normal11.blm"),
+            Map::Normal(12) => include_bytes!("assets/level/normal12.blm"),
+            Map::Normal(13) => include_bytes!("assets/level/normal13.blm"),
+            Map::Normal(14) => include_bytes!("assets/level/normal14.blm"),
+            Map::Normal(15) => include_bytes!("assets/level/normal15.blm"),
+            Map::Normal(16) => include_bytes!("assets/level/normal16.blm"),
+            Map::Normal(17) => include_bytes!("assets/level/normal17.blm"),
+            Map::Normal(18) => include_bytes!("assets/level/normal18.blm"),
+            Map::Normal(19) => include_bytes!("assets/level/normal19.blm"),
+            Map::Normal(20) => include_bytes!("assets/level/normal20.blm"),
+            Map::Normal(21) => include_bytes!("assets/level/normal21.blm"),
+            Map::Normal(22) => include_bytes!("assets/level/normal22.blm"),
+            Map::Normal(23) => include_bytes!("assets/level/normal23.blm"),
+            Map::Normal(24) => include_bytes!("assets/level/normal24.blm"),
+            Map::Normal(25) => include_bytes!("assets/level/normal25.blm"),
+            Map::Normal(26) => include_bytes!("assets/level/normal26.blm"),
+            Map::Normal(27) => include_bytes!("assets/level/normal27.blm"),
+            Map::Normal(28) => include_bytes!("assets/level/normal28.blm"),
+            Map::Normal(29) => include_bytes!("assets/level/normal29.blm"),
+            Map::Normal(30) => include_bytes!("assets/level/normal30.blm"),
+            Map::Normal(level) => return Err(format!("Invalid normal level: {}", level).into()),
+            Map::Egg(1) => include_bytes!("assets/level/egg01.blm"),
+            Map::Egg(2) => include_bytes!("assets/level/egg02.blm"),
+            Map::Egg(3) => include_bytes!("assets/level/egg03.blm"),
+            Map::Egg(4) => include_bytes!("assets/level/egg04.blm"),
+            Map::Egg(5) => include_bytes!("assets/level/egg05.blm"),
+            Map::Egg(6) => include_bytes!("assets/level/egg06.blm"),
+            Map::Egg(7) => include_bytes!("assets/level/egg07.blm"),
+            Map::Egg(8) => include_bytes!("assets/level/egg08.blm"),
+            Map::Egg(9) => include_bytes!("assets/level/egg09.blm"),
+            Map::Egg(10) => include_bytes!("assets/level/egg10.blm"),
+            Map::Egg(11) => include_bytes!("assets/level/egg11.blm"),
+            Map::Egg(12) => include_bytes!("assets/level/egg12.blm"),
+            Map::Egg(13) => include_bytes!("assets/level/egg13.blm"),
+            Map::Egg(14) => include_bytes!("assets/level/egg14.blm"),
+            Map::Egg(15) => include_bytes!("assets/level/egg15.blm"),
+            Map::Egg(16) => include_bytes!("assets/level/egg16.blm"),
+            Map::Egg(17) => include_bytes!("assets/level/egg17.blm"),
+            Map::Egg(18) => include_bytes!("assets/level/egg18.blm"),
+            Map::Egg(19) => include_bytes!("assets/level/egg19.blm"),
+            Map::Egg(20) => include_bytes!("assets/level/egg20.blm"),
+            Map::Egg(level) => return Err(format!("Invalid egg level: {}", level).into()),
         };
-        let filename = format!("assets/level/{map_filename}");
-        let data = fs::read(&filename)
-            .map_err(|err| format!("load level file '{}' failed: {}", filename, err))?
-            .split_off(4);
+        let data = data[4..].to_vec();
         let mut start_idx: u32 = 0;
         let mut carrot_total: usize = 0;
         let mut egg_total: usize = 0;
