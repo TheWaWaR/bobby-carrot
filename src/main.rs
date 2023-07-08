@@ -572,6 +572,7 @@ impl Bobby {
                 28 => map_data[old_pos] = 29,
                 29 => map_data[old_pos] = 28,
                 30 => map_data[old_pos] = 31,
+                45 => map_data[old_pos] = 46,
                 _ => {
                     // TODO
                 }
@@ -736,11 +737,13 @@ impl Bobby {
                 && (self.state == State::Up || self.state == State::Down))
             || ((new_item == 29 || new_item == 42 || new_item == 43)
                 && (self.state == State::Left || self.state == State::Right))
-        // stop by flow
+            // stop by flow
             || (new_item == 40 && self.state == State::Right)
             || (new_item == 41 && self.state == State::Left)
             || (new_item == 42 && self.state == State::Down)
             || (new_item == 43 && self.state == State::Up)
+            // egg
+            || (new_item == 46)
             // stop by current item
             || (old_item == 24 && (self.state == State::Left || self.state == State::Up))
             || (old_item == 25 && (self.state == State::Right || self.state == State::Up))
