@@ -119,7 +119,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Finished and hit the end position
-        if bobby.is_finished(&map_info)
+        if bobby.dead {
+            map_info_fresh = map.load_map_info()?;
+            map_info = map_info_fresh.clone();
+            bobby = Bobby::new(frame, (map_info.start_idx % 16, map_info.start_idx / 16));
+        } else if bobby.is_finished(&map_info)
             && map_info.data[(bobby.coord_src.0 + bobby.coord_src.1 * 16) as usize] == 44
         {
             if bobby.faded_out {
@@ -440,6 +444,7 @@ struct Bobby {
     key_red: usize,
     view_mode: bool,
     faded_out: bool,
+    dead: bool,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -470,6 +475,7 @@ impl Bobby {
             key_red: 0,
             view_mode: false,
             faded_out: false,
+            dead: false,
         }
     }
 
@@ -491,7 +497,22 @@ impl Bobby {
                 return (src, dest);
             }
             State::Death => {
-                todo!()
+                let mut step_death = step / 3;
+                if step_death > 7 {
+                    step_death = 7;
+                }
+                let src = Rect::new((step_death % 8) as i32 * 44, 0, 44, 54);
+                let x0 = self.coord_src.0 as i32 * 32;
+                let y0 = self.coord_src.1 as i32 * 32;
+                let x1 = self.coord_dest.0 as i32 * 32;
+                let y1 = self.coord_dest.1 as i32 * 32;
+                let x = (x1 - x0) / 2 + x0;
+                let y = (y1 - y0) / 2 + y0;
+                let dest = Rect::new(x + 16 - (44 / 2), y + 16 - (54 - 32 / 2), 44, 54);
+                if step / 3 >= 12 {
+                    self.dead = true;
+                }
+                return (src, dest);
             }
             State::FadeIn => {
                 let src = Rect::new((8 - step as i32) * 36, 0, 36, 50);
@@ -610,7 +631,10 @@ impl Bobby {
             }
         };
 
-        if step == 8 && is_walking {
+        if step == 6 && is_walking && self.next_state == Some(State::Death) {
+            self.start_frame = frame;
+            self.state = State::Death;
+        } else if step == 8 && is_walking {
             let old_pos = (self.coord_src.0 + self.coord_src.1 * 16) as usize;
             let new_pos = (self.coord_dest.0 + self.coord_dest.1 * 16) as usize;
             match map_data[old_pos] {
@@ -736,7 +760,11 @@ impl Bobby {
     }
 
     fn update_next_state(&mut self, state: State, frame: u32) {
-        if (frame - self.start_frame) / FRAMES_PER_STEP > 3 {
+        if (frame - self.start_frame) / FRAMES_PER_STEP > 3
+            && self.next_state != Some(State::Death)
+            && self.next_state != Some(State::FadeIn)
+            && self.next_state != Some(State::FadeOut)
+        {
             self.next_state = Some(state);
         }
     }
@@ -816,7 +844,7 @@ impl Bobby {
         {
             self.coord_dest = old_dest;
         } else if new_item == 31 {
-            self.state = State::Death;
+            self.next_state = Some(State::Death);
         }
     }
 }
