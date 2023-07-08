@@ -654,6 +654,10 @@ impl Bobby {
                     map_data[new_pos] = 18;
                     self.key_red -= 1;
                 }
+                40 => self.next_state = Some(State::Left),
+                41 => self.next_state = Some(State::Right),
+                42 => self.next_state = Some(State::Up),
+                43 => self.next_state = Some(State::Down),
                 _ => {}
             }
 
@@ -753,6 +757,10 @@ impl Bobby {
                 && (self.state == State::Up || self.state == State::Down))
             || ((old_item == 29 || old_item == 42 || old_item == 43)
                 && (self.state == State::Left || self.state == State::Right))
+            || (old_item == 40 && self.state == State::Right)
+            || (old_item == 41 && self.state == State::Left)
+            || (old_item == 42 && self.state == State::Down)
+            || (old_item == 43 && self.state == State::Up)
         {
             self.coord_dest = old_dest;
         }
