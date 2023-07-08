@@ -41,6 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let context = sdl2::init()?;
     let video_subsystem = context.video()?;
+    let timer = context.timer()?;
 
     let window = video_subsystem
         .window(format!("Bobby Carrot ({})", map).as_str(), WIDTH, HEIGHT)
@@ -51,7 +52,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut frame: u32 = 0;
     let assets = Assets::load_all(&texture_creator)?;
-    let mut bobby = Bobby::new(frame, (map_info.start_idx % 16, map_info.start_idx / 16));
+    let mut bobby = Bobby::new(
+        frame,
+        timer.ticks(),
+        (map_info.start_idx % 16, map_info.start_idx / 16),
+    );
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -74,6 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             map_info = map_info_fresh.clone();
                             bobby = Bobby::new(
                                 frame,
+                                timer.ticks(),
                                 (map_info.start_idx % 16, map_info.start_idx / 16),
                             );
                             None
@@ -87,6 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             map_info = map_info_fresh.clone();
                             bobby = Bobby::new(
                                 frame,
+                                timer.ticks(),
                                 (map_info.start_idx % 16, map_info.start_idx / 16),
                             );
                             None
@@ -100,6 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             map_info = map_info_fresh.clone();
                             bobby = Bobby::new(
                                 frame,
+                                timer.ticks(),
                                 (map_info.start_idx % 16, map_info.start_idx / 16),
                             );
                             None
@@ -107,6 +115,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         _ => None,
                     };
                     if let Some(state) = state_opt {
+                        bobby.last_action_time = timer.ticks();
                         if !bobby.is_walking() {
                             bobby.update_state(state, frame, &map_info.data);
                         } else {
@@ -122,7 +131,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if bobby.dead {
             map_info_fresh = map.load_map_info()?;
             map_info = map_info_fresh.clone();
-            bobby = Bobby::new(frame, (map_info.start_idx % 16, map_info.start_idx / 16));
+            bobby = Bobby::new(
+                frame,
+                timer.ticks(),
+                (map_info.start_idx % 16, map_info.start_idx / 16),
+            );
         } else if bobby.is_finished(&map_info)
             && map_info.data[(bobby.coord_src.0 + bobby.coord_src.1 * 16) as usize] == 44
         {
@@ -133,11 +146,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .set_title(format!("Bobby Carrot ({})", map).as_str())?;
                 map_info_fresh = map.load_map_info()?;
                 map_info = map_info_fresh.clone();
-                bobby = Bobby::new(frame, (map_info.start_idx % 16, map_info.start_idx / 16));
+                bobby = Bobby::new(
+                    frame,
+                    timer.ticks(),
+                    (map_info.start_idx % 16, map_info.start_idx / 16),
+                );
             } else if bobby.state != State::FadeOut {
                 bobby.start_frame = frame;
                 bobby.state = State::FadeOut;
             }
+        } else if timer.ticks() - bobby.last_action_time >= 4000
+            && !bobby.is_walking()
+            && bobby.state != State::Idle
+            && bobby.state != State::Death
+            && bobby.state != State::FadeIn
+            && bobby.state != State::FadeOut
+            && bobby.next_state.is_none()
+        {
+            bobby.start_frame = frame;
+            bobby.state = State::Idle;
         }
 
         let (bobby_src, bobby_dest) = bobby.update_texture_position(frame, &mut map_info.data);
@@ -434,6 +461,7 @@ struct Bobby {
     state: State,
     next_state: Option<State>,
     start_frame: u32,
+    last_action_time: u32,
     coord_src: (u32, u32),
     coord_dest: (u32, u32),
     // hud
@@ -460,11 +488,12 @@ enum State {
 }
 
 impl Bobby {
-    pub fn new(start_frame: u32, coord_src: (u32, u32)) -> Bobby {
+    pub fn new(start_frame: u32, last_action_time: u32, coord_src: (u32, u32)) -> Bobby {
         Bobby {
             state: State::FadeIn,
             next_state: None,
             start_frame,
+            last_action_time,
             coord_src,
             coord_dest: coord_src,
             // hud
@@ -486,7 +515,7 @@ impl Bobby {
         // println!("frame: {frame}, step: {step}, bobby: {:?}", self);
         let (src, dest) = match self.state {
             State::Idle => {
-                let step_idle = step % 3;
+                let step_idle = (step / 2) % 3;
                 let src = Rect::new(36 * step_idle as i32, 0, 36, 50);
                 let dest = Rect::new(
                     self.coord_src.0 as i32 * 32 + 16 - (36 / 2),
@@ -761,6 +790,7 @@ impl Bobby {
 
     fn update_next_state(&mut self, state: State, frame: u32) {
         if (frame - self.start_frame) / FRAMES_PER_STEP > 3
+            && self.next_state != Some(State::Idle)
             && self.next_state != Some(State::Death)
             && self.next_state != Some(State::FadeIn)
             && self.next_state != Some(State::FadeOut)
