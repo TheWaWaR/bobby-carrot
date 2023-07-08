@@ -9,8 +9,9 @@ use sdl2::{
     event::Event,
     image::LoadTexture,
     keyboard::Keycode,
+    pixels::Color,
     rect::Rect,
-    render::{Texture, TextureCreator},
+    render::{BlendMode, Texture, TextureCreator},
 };
 
 const FRAMES: u64 = 60;
@@ -21,8 +22,8 @@ const VIEW_WIDTH_POINTS: u32 = 10;
 const VIEW_HEIGHT_POINTS: u32 = 12;
 
 const MS_PER_FRAME: u64 = 1000 / FRAMES;
-// const WIDTH: u32 = 32 * WIDTH_POINTS;
-// const HEIGHT: u32 = 32 * HEIGHT_POINTS;
+const WIDTH: u32 = 32 * WIDTH_POINTS;
+const HEIGHT: u32 = 32 * HEIGHT_POINTS;
 const VIEW_WIDTH: u32 = 32 * VIEW_WIDTH_POINTS;
 const VIEW_HEIGHT: u32 = 32 * VIEW_HEIGHT_POINTS;
 const WIDTH_POINTS_DELTA: u32 = WIDTH_POINTS - VIEW_WIDTH_POINTS;
@@ -50,6 +51,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let video_subsystem = context.video()?;
     let timer = context.timer()?;
 
+    let mut show_help = false;
+    let mut full_view = false;
     let window = video_subsystem
         .window(
             format!("Bobby Carrot ({})", map).as_str(),
@@ -58,6 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .build()?;
     let mut canvas = window.into_canvas().present_vsync().build()?;
+    canvas.set_blend_mode(BlendMode::Blend);
     let texture_creator = canvas.texture_creator();
     let mut event_pump = context.event_pump()?;
 
@@ -66,17 +70,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut bobby = Bobby::new(frame, timer.ticks(), map_info.coord_start);
 
     'running: loop {
+        let now_ms = timer.ticks();
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
                 | Event::KeyDown {
-                    keycode: Some(Keycode::Escape | Keycode::Q),
+                    keycode: Some(Keycode::Q),
                     ..
                 } => break 'running,
                 Event::KeyDown {
                     keycode: Some(code),
                     ..
                 } => {
+                    if code != Keycode::H && code != Keycode::F1 {
+                        show_help = false;
+                    }
                     let state_opt = match code {
                         Keycode::Left => Some(State::Left),
                         Keycode::Right => Some(State::Right),
@@ -84,7 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Keycode::Down => Some(State::Down),
                         Keycode::R => {
                             map_info = map_info_fresh.clone();
-                            bobby = Bobby::new(frame, timer.ticks(), map_info.coord_start);
+                            bobby = Bobby::new(frame, now_ms, map_info.coord_start);
                             None
                         }
                         Keycode::N => {
@@ -94,7 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .set_title(format!("Bobby Carrot ({})", map).as_str())?;
                             map_info_fresh = map.load_map_info()?;
                             map_info = map_info_fresh.clone();
-                            bobby = Bobby::new(frame, timer.ticks(), map_info.coord_start);
+                            bobby = Bobby::new(frame, now_ms, map_info.coord_start);
                             None
                         }
                         Keycode::P => {
@@ -104,13 +112,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .set_title(format!("Bobby Carrot ({})", map).as_str())?;
                             map_info_fresh = map.load_map_info()?;
                             map_info = map_info_fresh.clone();
-                            bobby = Bobby::new(frame, timer.ticks(), map_info.coord_start);
+                            bobby = Bobby::new(frame, now_ms, map_info.coord_start);
+                            None
+                        }
+                        Keycode::F => {
+                            full_view = !full_view;
+                            if full_view {
+                                canvas.window_mut().set_size(WIDTH, HEIGHT)?;
+                            } else {
+                                canvas.window_mut().set_size(VIEW_WIDTH, VIEW_HEIGHT)?;
+                            }
+                            None
+                        }
+                        Keycode::H | Keycode::F1 => {
+                            show_help = !show_help;
                             None
                         }
                         _ => None,
                     };
                     if let Some(state) = state_opt {
-                        bobby.last_action_time = timer.ticks();
+                        bobby.last_action_time = now_ms;
                         if !bobby.is_walking() {
                             bobby.update_state(state, frame, &map_info.data);
                         } else {
@@ -126,7 +147,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if bobby.dead {
             map_info_fresh = map.load_map_info()?;
             map_info = map_info_fresh.clone();
-            bobby = Bobby::new(frame, timer.ticks(), map_info.coord_start);
+            bobby = Bobby::new(frame, now_ms, map_info.coord_start);
         } else if bobby.is_finished(&map_info)
             && map_info.data[(bobby.coord_src.0 + bobby.coord_src.1 * 16) as usize] == 44
         {
@@ -137,12 +158,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .set_title(format!("Bobby Carrot ({})", map).as_str())?;
                 map_info_fresh = map.load_map_info()?;
                 map_info = map_info_fresh.clone();
-                bobby = Bobby::new(frame, timer.ticks(), map_info.coord_start);
+                bobby = Bobby::new(frame, now_ms, map_info.coord_start);
             } else if bobby.state != State::FadeOut {
                 bobby.start_frame = frame;
                 bobby.state = State::FadeOut;
             }
-        } else if timer.ticks() - bobby.last_action_time >= 4000
+        } else if now_ms - bobby.last_action_time >= 4000
             && !bobby.is_walking()
             && bobby.state != State::Idle
             && bobby.state != State::Death
@@ -207,55 +228,59 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
 
         // Set view port
-        let step = (frame - bobby.start_frame) as i32;
-        let x0 = bobby.coord_src.0 as i32 * 32;
-        let y0 = bobby.coord_src.1 as i32 * 32;
-        let x1 = bobby.coord_dest.0 as i32 * 32;
-        let y1 = bobby.coord_dest.1 as i32 * 32;
-        let mut x = if bobby.state == State::Death {
-            // death happened at 6/8 of walking
-            (x1 - x0) * 6 / 8 + x0 - (VIEW_WIDTH_POINTS as i32 / 2) * 32
+        let (x_offset, x_right_offset, y_offset) = if full_view {
+            (0, 0, 0)
         } else {
-            (x1 - x0) * step / (8 * FRAMES_PER_STEP as i32) + x0
-                - (VIEW_WIDTH_POINTS as i32 / 2) * 32
+            let step = (frame - bobby.start_frame) as i32;
+            let x0 = bobby.coord_src.0 as i32 * 32;
+            let y0 = bobby.coord_src.1 as i32 * 32;
+            let x1 = bobby.coord_dest.0 as i32 * 32;
+            let y1 = bobby.coord_dest.1 as i32 * 32;
+            let mut x = if bobby.state == State::Death {
+                // death happened at 6/8 of walking
+                (x1 - x0) * 6 / 8 + x0 - (VIEW_WIDTH_POINTS as i32 / 2) * 32
+            } else {
+                (x1 - x0) * step / (8 * FRAMES_PER_STEP as i32) + x0
+                    - (VIEW_WIDTH_POINTS as i32 / 2) * 32
+            };
+            let mut y = if bobby.state == State::Death {
+                // death happened at 6/8 of walking
+                (y1 - y0) * 6 / 8 + y0 - (VIEW_HEIGHT_POINTS as i32 / 2) * 32
+            } else {
+                (y1 - y0) * step / (8 * FRAMES_PER_STEP as i32) + y0
+                    - (VIEW_HEIGHT_POINTS as i32 / 2) * 32
+            };
+            x += 16;
+            y += 16;
+            if x < 0 {
+                x = 0;
+            }
+            if x > WIDTH_POINTS_DELTA as i32 * 32 {
+                x = WIDTH_POINTS_DELTA as i32 * 32;
+            }
+            if y < 0 {
+                y = 0;
+            }
+            if y > HEIGHT_POINTS_DELTA as i32 * 32 {
+                y = HEIGHT_POINTS_DELTA as i32 * 32;
+            }
+            canvas.set_viewport(Rect::new(
+                -x,
+                -y,
+                VIEW_WIDTH + x as u32,
+                VIEW_HEIGHT + y as u32,
+            ));
+            (x, 32 * WIDTH_POINTS_DELTA as i32 - x, y)
         };
-        let mut y = if bobby.state == State::Death {
-            // death happened at 6/8 of walking
-            (y1 - y0) * 6 / 8 + y0 - (VIEW_HEIGHT_POINTS as i32 / 2) * 32
-        } else {
-            (y1 - y0) * step / (8 * FRAMES_PER_STEP as i32) + y0
-                - (VIEW_HEIGHT_POINTS as i32 / 2) * 32
-        };
-        x += 16;
-        y += 16;
-        if x < 0 {
-            x = 0;
-        }
-        if x > WIDTH_POINTS_DELTA as i32 * 32 {
-            x = WIDTH_POINTS_DELTA as i32 * 32;
-        }
-        if y < 0 {
-            y = 0;
-        }
-        if y > HEIGHT_POINTS_DELTA as i32 * 32 {
-            y = HEIGHT_POINTS_DELTA as i32 * 32;
-        }
-        canvas.set_viewport(Rect::new(
-            -x,
-            -y,
-            VIEW_WIDTH + x as u32,
-            VIEW_HEIGHT + y as u32,
-        ));
 
         // Indicator
-        let indicator_x_offset = 32 * WIDTH_POINTS_DELTA as i32 - x;
         let (icon_width, num_left) = if map_info.carrot_total > 0 {
             canvas.copy_ex(
                 &assets.hud_texture,
                 Some(Rect::new(0, 0, 46, 44)),
                 Some(Rect::new(
-                    32 * 16 - (46 + 4) - indicator_x_offset,
-                    4 + y,
+                    32 * 16 - (46 + 4) - x_right_offset,
+                    4 + y_offset,
                     46,
                     44,
                 )),
@@ -270,8 +295,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &assets.hud_texture,
                 Some(Rect::new(46, 0, 34, 44)),
                 Some(Rect::new(
-                    32 * 16 - (34 + 4) - indicator_x_offset,
-                    4 + y,
+                    32 * 16 - (34 + 4) - x_right_offset,
+                    4 + y_offset,
                     34,
                     44,
                 )),
@@ -288,8 +313,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &assets.numbers_texture,
             Some(Rect::new(num_01 * 12, 0, 12, 18)),
             Some(Rect::new(
-                32 * 16 - (icon_width + 4) - 2 - 12 - indicator_x_offset,
-                4 + 14 + y,
+                32 * 16 - (icon_width + 4) - 2 - 12 - x_right_offset,
+                4 + 14 + y_offset,
                 12,
                 18,
             )),
@@ -302,8 +327,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &assets.numbers_texture,
             Some(Rect::new(num_10 * 12, 0, 12, 18)),
             Some(Rect::new(
-                32 * 16 - (icon_width + 4) - 2 - 12 * 2 - 1 - indicator_x_offset,
-                4 + 14 + y,
+                32 * 16 - (icon_width + 4) - 2 - 12 * 2 - 1 - x_right_offset,
+                4 + 14 + y_offset,
                 12,
                 18,
             )),
@@ -329,10 +354,63 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &assets.hud_texture,
                 Some(Rect::new(offset, 0, 22, 44)),
                 Some(Rect::new(
-                    32 * 16 - (22 + 4) - count * 22 - indicator_x_offset,
-                    4 + 44 + 2 + y,
+                    32 * 16 - (22 + 4) - count * 22 - x_right_offset,
+                    4 + 44 + 2 + y_offset,
                     22,
                     44,
+                )),
+                0.0,
+                None,
+                false,
+                false,
+            )?;
+        }
+
+        // time passed
+        let passed_secs = ((now_ms - bobby.start_time) / 1000) as i32;
+        let mut minutes = passed_secs / 60;
+        let mut seconds = passed_secs % 60;
+        if minutes > 99 {
+            minutes = 99;
+            seconds = 99;
+        }
+        for (idx, offset) in [minutes / 10, minutes % 10, 10, seconds / 10, seconds % 10]
+            .into_iter()
+            .enumerate()
+        {
+            canvas.copy_ex(
+                &assets.numbers_texture,
+                Some(Rect::new(offset * 12, 0, 12, 18)),
+                Some(Rect::new(
+                    4 + 12 * idx as i32 + x_offset,
+                    4 + y_offset,
+                    12,
+                    18,
+                )),
+                0.0,
+                None,
+                false,
+                false,
+            )?;
+        }
+
+        // Show help page
+        if show_help {
+            canvas.set_draw_color(Color::RGBA(0, 0, 0, 200));
+            canvas.fill_rect(Rect::new(
+                (32 * 16 - x_offset - x_right_offset - 158) / 2 + x_offset,
+                32 * 3 - (160 - 142) / 2 + y_offset,
+                158,
+                160,
+            ))?;
+            canvas.copy_ex(
+                &assets.help_texture,
+                Some(Rect::new(0, 0, 133, 142)),
+                Some(Rect::new(
+                    (32 * 16 - x_offset - x_right_offset - 133) / 2 + x_offset,
+                    32 * 3 + y_offset,
+                    133,
+                    142,
                 )),
                 0.0,
                 None,
@@ -366,6 +444,7 @@ struct Assets<'a> {
     tile_finish_texture: Texture<'a>,
     hud_texture: Texture<'a>,
     numbers_texture: Texture<'a>,
+    help_texture: Texture<'a>,
 }
 
 impl<'a> Assets<'a> {
@@ -402,6 +481,7 @@ impl<'a> Assets<'a> {
         let hud_texture = texture_creator.load_texture(Path::new("assets/image/hud.png"))?;
         let numbers_texture =
             texture_creator.load_texture(Path::new("assets/image/numbers.png"))?;
+        let help_texture = texture_creator.load_texture(Path::new("assets/image/help.png"))?;
         Ok(Assets {
             bobby_idle_texture,
             bobby_death_texture,
@@ -418,6 +498,7 @@ impl<'a> Assets<'a> {
             tile_finish_texture,
             hud_texture,
             numbers_texture,
+            help_texture,
         })
     }
 }
@@ -500,6 +581,7 @@ struct Bobby {
     state: State,
     next_state: Option<State>,
     start_frame: u32,
+    start_time: u32,
     last_action_time: u32,
     coord_src: (u32, u32),
     coord_dest: (u32, u32),
@@ -509,7 +591,6 @@ struct Bobby {
     key_gray: usize,
     key_yellow: usize,
     key_red: usize,
-    view_mode: bool,
     faded_out: bool,
     dead: bool,
 }
@@ -527,12 +608,13 @@ enum State {
 }
 
 impl Bobby {
-    pub fn new(start_frame: u32, last_action_time: u32, coord_src: (u32, u32)) -> Bobby {
+    pub fn new(start_frame: u32, start_time: u32, coord_src: (u32, u32)) -> Bobby {
         Bobby {
             state: State::FadeIn,
             next_state: None,
             start_frame,
-            last_action_time,
+            start_time,
+            last_action_time: start_time,
             coord_src,
             coord_dest: coord_src,
             // hud
@@ -541,7 +623,6 @@ impl Bobby {
             key_gray: 0,
             key_yellow: 0,
             key_red: 0,
-            view_mode: false,
             faded_out: false,
             dead: false,
         }
