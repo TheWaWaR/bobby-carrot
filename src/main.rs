@@ -113,7 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Finished and hit the end position
-        if bobby.carrot_count == map_info.carrot_total
+        if bobby.is_finished(&map_info)
             && map_info.data[(bobby.coord_src.0 + bobby.coord_src.1 * 16) as usize] == 44
         {
             map = map.next();
@@ -133,7 +133,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             State::Up => &assets.bobby_up_texture,
             State::Down => &assets.bobby_down_texture,
         };
-        let finished = bobby.carrot_count == map_info.carrot_total;
+        let finished = bobby.is_finished(&map_info);
 
         canvas.clear();
 
@@ -173,6 +173,90 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             false,
             false,
         )?;
+
+        // Indicator
+        let (icon_width, num_left) = if map_info.carrot_total > 0 {
+            canvas.copy_ex(
+                &assets.hud_texture,
+                Some(Rect::new(0, 0, 46, 44)),
+                Some(Rect::new(32 * 16 - (46 + 4), 4, 46, 44)),
+                0.0,
+                None,
+                false,
+                false,
+            )?;
+            (46, map_info.carrot_total - bobby.carrot_count)
+        } else {
+            canvas.copy_ex(
+                &assets.hud_texture,
+                Some(Rect::new(46, 0, 34, 44)),
+                Some(Rect::new(32 * 16 - (34 + 4), 4, 34, 44)),
+                0.0,
+                None,
+                false,
+                false,
+            )?;
+            (34, map_info.egg_total - bobby.egg_count)
+        };
+        let num_10 = num_left as i32 / 10;
+        let num_01 = num_left as i32 % 10;
+        canvas.copy_ex(
+            &assets.numbers_texture,
+            Some(Rect::new(num_01 * 12, 0, 12, 18)),
+            Some(Rect::new(
+                32 * 16 - (icon_width + 4) - 2 - 12,
+                4 + 14,
+                12,
+                18,
+            )),
+            0.0,
+            None,
+            false,
+            false,
+        )?;
+        canvas.copy_ex(
+            &assets.numbers_texture,
+            Some(Rect::new(num_10 * 12, 0, 12, 18)),
+            Some(Rect::new(
+                32 * 16 - (icon_width + 4) - 2 - 12 * 2,
+                4 + 14,
+                12,
+                18,
+            )),
+            0.0,
+            None,
+            false,
+            false,
+        )?;
+
+        // Key
+        let mut keys = Vec::new();
+        for _ in 0..bobby.key_gray {
+            keys.push((122, keys.len() as i32));
+        }
+        for _ in 0..bobby.key_yellow {
+            keys.push((122 + 22, keys.len() as i32));
+        }
+        for _ in 0..bobby.key_red {
+            keys.push((122 + 22 + 22, keys.len() as i32));
+        }
+        for (offset, count) in keys {
+            canvas.copy_ex(
+                &assets.hud_texture,
+                Some(Rect::new(offset, 0, 22, 44)),
+                Some(Rect::new(
+                    32 * 16 - (22 + 4) - count * 22,
+                    4 + 44 + 2,
+                    22,
+                    44,
+                )),
+                0.0,
+                None,
+                false,
+                false,
+            )?;
+        }
+
         canvas.present();
 
         frame += 1;
@@ -583,6 +667,14 @@ impl Bobby {
 
     fn is_walking(&self) -> bool {
         self.coord_src != self.coord_dest
+    }
+
+    fn is_finished(&self, map_info: &MapInfo) -> bool {
+        if map_info.carrot_total > 0 {
+            self.carrot_count == map_info.carrot_total
+        } else {
+            self.egg_count == map_info.egg_total
+        }
     }
 
     fn update_next_state(&mut self, state: State, frame: u32) {
