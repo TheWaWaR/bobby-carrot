@@ -14,12 +14,19 @@ use sdl2::{
 };
 
 const FRAMES: u64 = 60;
-const MS_PER_FRAME: u64 = 1000 / FRAMES;
 const FRAMES_PER_STEP: u32 = 2;
 const WIDTH_POINTS: u32 = 16;
 const HEIGHT_POINTS: u32 = 16;
-const WIDTH: u32 = 32 * WIDTH_POINTS;
-const HEIGHT: u32 = 32 * HEIGHT_POINTS;
+const VIEW_WIDTH_POINTS: u32 = 10;
+const VIEW_HEIGHT_POINTS: u32 = 12;
+
+const MS_PER_FRAME: u64 = 1000 / FRAMES;
+// const WIDTH: u32 = 32 * WIDTH_POINTS;
+// const HEIGHT: u32 = 32 * HEIGHT_POINTS;
+const VIEW_WIDTH: u32 = 32 * VIEW_WIDTH_POINTS;
+const VIEW_HEIGHT: u32 = 32 * VIEW_HEIGHT_POINTS;
+const WIDTH_POINTS_DELTA: u32 = WIDTH_POINTS - VIEW_WIDTH_POINTS;
+const HEIGHT_POINTS_DELTA: u32 = HEIGHT_POINTS - VIEW_HEIGHT_POINTS;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut map = Map::Normal(1);
@@ -44,7 +51,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let timer = context.timer()?;
 
     let window = video_subsystem
-        .window(format!("Bobby Carrot ({})", map).as_str(), WIDTH, HEIGHT)
+        .window(
+            format!("Bobby Carrot ({})", map).as_str(),
+            VIEW_WIDTH,
+            VIEW_HEIGHT,
+        )
         .build()?;
     let mut canvas = window.into_canvas().present_vsync().build()?;
     let texture_creator = canvas.texture_creator();
@@ -52,11 +63,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut frame: u32 = 0;
     let assets = Assets::load_all(&texture_creator)?;
-    let mut bobby = Bobby::new(
-        frame,
-        timer.ticks(),
-        (map_info.start_idx % 16, map_info.start_idx / 16),
-    );
+    let mut bobby = Bobby::new(frame, timer.ticks(), map_info.coord_start);
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -77,11 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Keycode::Down => Some(State::Down),
                         Keycode::R => {
                             map_info = map_info_fresh.clone();
-                            bobby = Bobby::new(
-                                frame,
-                                timer.ticks(),
-                                (map_info.start_idx % 16, map_info.start_idx / 16),
-                            );
+                            bobby = Bobby::new(frame, timer.ticks(), map_info.coord_start);
                             None
                         }
                         Keycode::N => {
@@ -91,11 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .set_title(format!("Bobby Carrot ({})", map).as_str())?;
                             map_info_fresh = map.load_map_info()?;
                             map_info = map_info_fresh.clone();
-                            bobby = Bobby::new(
-                                frame,
-                                timer.ticks(),
-                                (map_info.start_idx % 16, map_info.start_idx / 16),
-                            );
+                            bobby = Bobby::new(frame, timer.ticks(), map_info.coord_start);
                             None
                         }
                         Keycode::P => {
@@ -105,11 +104,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .set_title(format!("Bobby Carrot ({})", map).as_str())?;
                             map_info_fresh = map.load_map_info()?;
                             map_info = map_info_fresh.clone();
-                            bobby = Bobby::new(
-                                frame,
-                                timer.ticks(),
-                                (map_info.start_idx % 16, map_info.start_idx / 16),
-                            );
+                            bobby = Bobby::new(frame, timer.ticks(), map_info.coord_start);
                             None
                         }
                         _ => None,
@@ -131,11 +126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if bobby.dead {
             map_info_fresh = map.load_map_info()?;
             map_info = map_info_fresh.clone();
-            bobby = Bobby::new(
-                frame,
-                timer.ticks(),
-                (map_info.start_idx % 16, map_info.start_idx / 16),
-            );
+            bobby = Bobby::new(frame, timer.ticks(), map_info.coord_start);
         } else if bobby.is_finished(&map_info)
             && map_info.data[(bobby.coord_src.0 + bobby.coord_src.1 * 16) as usize] == 44
         {
@@ -146,11 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .set_title(format!("Bobby Carrot ({})", map).as_str())?;
                 map_info_fresh = map.load_map_info()?;
                 map_info = map_info_fresh.clone();
-                bobby = Bobby::new(
-                    frame,
-                    timer.ticks(),
-                    (map_info.start_idx % 16, map_info.start_idx / 16),
-                );
+                bobby = Bobby::new(frame, timer.ticks(), map_info.coord_start);
             } else if bobby.state != State::FadeOut {
                 bobby.start_frame = frame;
                 bobby.state = State::FadeOut;
@@ -219,12 +206,59 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             false,
         )?;
 
+        // Set view port
+        let step = (frame - bobby.start_frame) as i32;
+        let x0 = bobby.coord_src.0 as i32 * 32;
+        let y0 = bobby.coord_src.1 as i32 * 32;
+        let x1 = bobby.coord_dest.0 as i32 * 32;
+        let y1 = bobby.coord_dest.1 as i32 * 32;
+        let mut x = if bobby.state == State::Death {
+            // death happened at 6/8 of walking
+            (x1 - x0) * 6 / 8 + x0 - (VIEW_WIDTH_POINTS as i32 / 2) * 32
+        } else {
+            (x1 - x0) * step / (8 * FRAMES_PER_STEP as i32) + x0
+                - (VIEW_WIDTH_POINTS as i32 / 2) * 32
+        };
+        let mut y = if bobby.state == State::Death {
+            // death happened at 6/8 of walking
+            (y1 - y0) * 6 / 8 + y0 - (VIEW_HEIGHT_POINTS as i32 / 2) * 32
+        } else {
+            (y1 - y0) * step / (8 * FRAMES_PER_STEP as i32) + y0
+                - (VIEW_HEIGHT_POINTS as i32 / 2) * 32
+        };
+        x += 16;
+        y += 16;
+        if x < 0 {
+            x = 0;
+        }
+        if x > WIDTH_POINTS_DELTA as i32 * 32 {
+            x = WIDTH_POINTS_DELTA as i32 * 32;
+        }
+        if y < 0 {
+            y = 0;
+        }
+        if y > HEIGHT_POINTS_DELTA as i32 * 32 {
+            y = HEIGHT_POINTS_DELTA as i32 * 32;
+        }
+        canvas.set_viewport(Rect::new(
+            -x,
+            -y,
+            VIEW_WIDTH + x as u32,
+            VIEW_HEIGHT + y as u32,
+        ));
+
         // Indicator
+        let indicator_x_offset = 32 * WIDTH_POINTS_DELTA as i32 - x;
         let (icon_width, num_left) = if map_info.carrot_total > 0 {
             canvas.copy_ex(
                 &assets.hud_texture,
                 Some(Rect::new(0, 0, 46, 44)),
-                Some(Rect::new(32 * 16 - (46 + 4), 4, 46, 44)),
+                Some(Rect::new(
+                    32 * 16 - (46 + 4) - indicator_x_offset,
+                    4 + y,
+                    46,
+                    44,
+                )),
                 0.0,
                 None,
                 false,
@@ -235,7 +269,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             canvas.copy_ex(
                 &assets.hud_texture,
                 Some(Rect::new(46, 0, 34, 44)),
-                Some(Rect::new(32 * 16 - (34 + 4), 4, 34, 44)),
+                Some(Rect::new(
+                    32 * 16 - (34 + 4) - indicator_x_offset,
+                    4 + y,
+                    34,
+                    44,
+                )),
                 0.0,
                 None,
                 false,
@@ -249,8 +288,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &assets.numbers_texture,
             Some(Rect::new(num_01 * 12, 0, 12, 18)),
             Some(Rect::new(
-                32 * 16 - (icon_width + 4) - 2 - 12,
-                4 + 14,
+                32 * 16 - (icon_width + 4) - 2 - 12 - indicator_x_offset,
+                4 + 14 + y,
                 12,
                 18,
             )),
@@ -263,8 +302,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &assets.numbers_texture,
             Some(Rect::new(num_10 * 12, 0, 12, 18)),
             Some(Rect::new(
-                32 * 16 - (icon_width + 4) - 2 - 12 * 2 - 1,
-                4 + 14,
+                32 * 16 - (icon_width + 4) - 2 - 12 * 2 - 1 - indicator_x_offset,
+                4 + 14 + y,
                 12,
                 18,
             )),
@@ -290,8 +329,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &assets.hud_texture,
                 Some(Rect::new(offset, 0, 22, 44)),
                 Some(Rect::new(
-                    32 * 16 - (22 + 4) - count * 22,
-                    4 + 44 + 2,
+                    32 * 16 - (22 + 4) - count * 22 - indicator_x_offset,
+                    4 + 44 + 2 + y,
                     22,
                     44,
                 )),
@@ -392,7 +431,7 @@ enum Map {
 #[derive(Clone)]
 struct MapInfo {
     data: Vec<u8>,
-    start_idx: u32,
+    coord_start: (u32, u32),
     carrot_total: usize,
     egg_total: usize,
 }
@@ -429,7 +468,7 @@ impl Map {
         }
         Ok(MapInfo {
             data,
-            start_idx,
+            coord_start: (start_idx % 16, start_idx / 16),
             carrot_total,
             egg_total,
         })
