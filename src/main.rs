@@ -36,8 +36,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => return Err(format!("Invalid map: {arg}").into()),
         }
     }
-    let (mut map_data_fresh, mut map_start, mut carrot_total) = map.load_map_data()?;
-    let mut map_data = map_data_fresh.clone();
+    let mut map_info_fresh = map.load_map_info()?;
+    let mut map_info = map_info_fresh.clone();
 
     let context = sdl2::init()?;
     let video_subsystem = context.video()?;
@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut event_pump = context.event_pump()?;
 
     let assets = Assets::load_all(&texture_creator)?;
-    let mut bobby = Bobby::new(0, (map_start as u32 % 16, map_start as u32 / 16));
+    let mut bobby = Bobby::new(0, (map_info.start_idx % 16, map_info.start_idx / 16));
 
     let mut frame: u32 = 0;
     'running: loop {
@@ -60,9 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 | Event::KeyDown {
                     keycode: Some(Keycode::Escape | Keycode::Q),
                     ..
-                } => {
-                    break 'running;
-                }
+                } => break 'running,
                 Event::KeyDown {
                     keycode: Some(code),
                     ..
@@ -73,8 +71,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Keycode::Up => Some(State::Up),
                         Keycode::Down => Some(State::Down),
                         Keycode::R => {
-                            map_data = map_data_fresh.clone();
-                            bobby = Bobby::new(0, (map_start as u32 % 16, map_start as u32 / 16));
+                            map_info = map_info_fresh.clone();
+                            bobby =
+                                Bobby::new(0, (map_info.start_idx % 16, map_info.start_idx / 16));
                             None
                         }
                         Keycode::N => {
@@ -82,9 +81,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             canvas
                                 .window_mut()
                                 .set_title(format!("Bobby Carrot ({})", map).as_str())?;
-                            (map_data_fresh, map_start, carrot_total) = map.load_map_data()?;
-                            map_data = map_data_fresh.clone();
-                            bobby = Bobby::new(0, (map_start as u32 % 16, map_start as u32 / 16));
+                            map_info_fresh = map.load_map_info()?;
+                            map_info = map_info_fresh.clone();
+                            bobby =
+                                Bobby::new(0, (map_info.start_idx % 16, map_info.start_idx / 16));
                             None
                         }
                         Keycode::P => {
@@ -92,16 +92,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             canvas
                                 .window_mut()
                                 .set_title(format!("Bobby Carrot ({})", map).as_str())?;
-                            (map_data_fresh, map_start, carrot_total) = map.load_map_data()?;
-                            map_data = map_data_fresh.clone();
-                            bobby = Bobby::new(0, (map_start as u32 % 16, map_start as u32 / 16));
+                            map_info_fresh = map.load_map_info()?;
+                            map_info = map_info_fresh.clone();
+                            bobby =
+                                Bobby::new(0, (map_info.start_idx % 16, map_info.start_idx / 16));
                             None
                         }
                         _ => None,
                     };
                     if let Some(state) = state_opt {
                         if !bobby.is_walking() {
-                            bobby.update_state(state, frame, &map_data);
+                            bobby.update_state(state, frame, &map_info.data);
                         } else {
                             bobby.update_next_state(state, frame);
                         }
@@ -112,19 +113,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Finished and hit the end position
-        if bobby.carrot_count == carrot_total
-            && map_data[(bobby.coord_src.0 + bobby.coord_src.1 * 16) as usize] == 44
+        if bobby.carrot_count == map_info.carrot_total
+            && map_info.data[(bobby.coord_src.0 + bobby.coord_src.1 * 16) as usize] == 44
         {
             map = map.next();
             canvas
                 .window_mut()
                 .set_title(format!("Bobby Carrot ({})", map).as_str())?;
-            (map_data_fresh, map_start, carrot_total) = map.load_map_data()?;
-            map_data = map_data_fresh.clone();
-            bobby = Bobby::new(0, (map_start as u32 % 16, map_start as u32 / 16));
+            map_info_fresh = map.load_map_info()?;
+            map_info = map_info_fresh.clone();
+            bobby = Bobby::new(0, (map_info.start_idx % 16, map_info.start_idx / 16));
         }
 
-        let (bobby_src, bobby_dest) = bobby.update_texture_position(frame, &mut map_data);
+        let (bobby_src, bobby_dest) = bobby.update_texture_position(frame, &mut map_info.data);
         let bobby_texture = match bobby.state {
             State::Idle => &assets.bobby_idle_texture,
             State::Left => &assets.bobby_left_texture,
@@ -132,43 +133,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             State::Up => &assets.bobby_up_texture,
             State::Down => &assets.bobby_down_texture,
         };
-        let finished = bobby.carrot_count == carrot_total;
+        let finished = bobby.carrot_count == map_info.carrot_total;
 
         canvas.clear();
 
         for x in 0..WIDTH_POINTS {
             for y in 0..HEIGHT_POINTS {
-                let item = map_data[x as usize + y as usize * 16] as i32;
-                let (texture, src) = if item == 44 && finished {
-                    (
-                        &assets.tile_finish_texture,
-                        Rect::new(32 * ((frame as i32 / (FRAMES as i32 / 10)) % 4), 0, 32, 32),
-                    )
-                } else if item == 40 {
-                    (
-                        &assets.tile_conveyor_left_texture,
-                        Rect::new(32 * ((frame as i32 / (FRAMES as i32 / 10)) % 4), 0, 32, 32),
-                    )
-                } else if item == 41 {
-                    (
-                        &assets.tile_conveyor_right_texture,
-                        Rect::new(32 * ((frame as i32 / (FRAMES as i32 / 10)) % 4), 0, 32, 32),
-                    )
-                } else if item == 42 {
-                    (
-                        &assets.tile_conveyor_up_texture,
-                        Rect::new(32 * ((frame as i32 / (FRAMES as i32 / 10)) % 4), 0, 32, 32),
-                    )
-                } else if item == 43 {
-                    (
-                        &assets.tile_conveyor_down_texture,
-                        Rect::new(32 * ((frame as i32 / (FRAMES as i32 / 10)) % 4), 0, 32, 32),
-                    )
+                let item = map_info.data[x as usize + y as usize * 16] as i32;
+                let texture = match item {
+                    44 if finished => &assets.tile_finish_texture,
+                    40 => &assets.tile_conveyor_left_texture,
+                    41 => &assets.tile_conveyor_right_texture,
+                    42 => &assets.tile_conveyor_up_texture,
+                    43 => &assets.tile_conveyor_down_texture,
+                    _ => &assets.tileset_texture,
+                };
+                let src = if (item == 44 && finished) || (40..=43).contains(&item) {
+                    Rect::new(32 * ((frame as i32 / (FRAMES as i32 / 10)) % 4), 0, 32, 32)
                 } else {
-                    (
-                        &assets.tileset_texture,
-                        Rect::new(32 * (item % 8), 32 * (item / 8), 32, 32),
-                    )
+                    Rect::new(32 * (item % 8), 32 * (item / 8), 32, 32)
                 };
                 canvas.copy_ex(
                     texture,
@@ -201,6 +184,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 struct Assets<'a> {
     bobby_idle_texture: Texture<'a>,
+    bobby_death_texture: Texture<'a>,
+    bobby_fade_texture: Texture<'a>,
     bobby_left_texture: Texture<'a>,
     bobby_right_texture: Texture<'a>,
     bobby_up_texture: Texture<'a>,
@@ -211,6 +196,8 @@ struct Assets<'a> {
     tile_conveyor_down_texture: Texture<'a>,
     tileset_texture: Texture<'a>,
     tile_finish_texture: Texture<'a>,
+    hud_texture: Texture<'a>,
+    numbers_texture: Texture<'a>,
 }
 
 impl<'a> Assets<'a> {
@@ -219,6 +206,10 @@ impl<'a> Assets<'a> {
     ) -> Result<Assets<'a>, Box<dyn std::error::Error>> {
         let bobby_idle_texture =
             texture_creator.load_texture(Path::new("assets/image/bobby_idle.png"))?;
+        let bobby_death_texture =
+            texture_creator.load_texture(Path::new("assets/image/bobby_death.png"))?;
+        let bobby_fade_texture =
+            texture_creator.load_texture(Path::new("assets/image/bobby_fade.png"))?;
         let bobby_left_texture =
             texture_creator.load_texture(Path::new("assets/image/bobby_left.png"))?;
         let bobby_right_texture =
@@ -240,8 +231,13 @@ impl<'a> Assets<'a> {
             texture_creator.load_texture(Path::new("assets/image/tileset.png"))?;
         let tile_finish_texture =
             texture_creator.load_texture(Path::new("assets/image/tile_finish.png"))?;
+        let hud_texture = texture_creator.load_texture(Path::new("assets/image/hud.png"))?;
+        let numbers_texture =
+            texture_creator.load_texture(Path::new("assets/image/numbers.png"))?;
         Ok(Assets {
             bobby_idle_texture,
+            bobby_death_texture,
+            bobby_fade_texture,
             bobby_left_texture,
             bobby_right_texture,
             bobby_up_texture,
@@ -252,6 +248,8 @@ impl<'a> Assets<'a> {
             tile_conveyor_down_texture,
             tileset_texture,
             tile_finish_texture,
+            hud_texture,
+            numbers_texture,
         })
     }
 }
@@ -260,6 +258,14 @@ impl<'a> Assets<'a> {
 enum Map {
     Normal(u32),
     Egg(u32),
+}
+
+#[derive(Clone)]
+struct MapInfo {
+    data: Vec<u8>,
+    start_idx: u32,
+    carrot_total: usize,
+    egg_total: usize,
 }
 
 impl fmt::Display for Map {
@@ -272,7 +278,7 @@ impl fmt::Display for Map {
 }
 
 impl Map {
-    fn load_map_data(&self) -> Result<(Vec<u8>, usize, usize), Box<dyn std::error::Error>> {
+    fn load_map_info(&self) -> Result<MapInfo, Box<dyn std::error::Error>> {
         let map_filename = match self {
             Map::Normal(n) => format!("normal{:02}.blm", n),
             Map::Egg(n) => format!("egg{:02}.blm", n),
@@ -281,16 +287,23 @@ impl Map {
         let data = fs::read(&filename)
             .map_err(|err| format!("load level file '{}' failed: {}", filename, err))?
             .split_off(4);
-        let mut map_start: usize = 0;
+        let mut start_idx: u32 = 0;
         let mut carrot_total: usize = 0;
+        let mut egg_total: usize = 0;
         for (idx, byte) in data.iter().enumerate() {
             match byte {
                 19 => carrot_total += 1,
-                21 => map_start = idx,
+                45 => egg_total += 1,
+                21 => start_idx = idx as u32,
                 _ => {}
             }
         }
-        Ok((data, map_start, carrot_total))
+        Ok(MapInfo {
+            data,
+            start_idx,
+            carrot_total,
+            egg_total,
+        })
     }
 
     fn next(self) -> Map {
@@ -321,7 +334,13 @@ struct Bobby {
     start_frame: u32,
     coord_src: (u32, u32),
     coord_dest: (u32, u32),
+    // hud
     carrot_count: usize,
+    egg_count: usize,
+    key_gray: usize,
+    key_yellow: usize,
+    key_red: usize,
+    view_mode: bool,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -341,7 +360,13 @@ impl Bobby {
             start_frame,
             coord_src,
             coord_dest: coord_src,
+            // hud
             carrot_count: 0,
+            egg_count: 0,
+            key_gray: 0,
+            key_yellow: 0,
+            key_red: 0,
+            view_mode: false,
         }
     }
 
@@ -517,6 +542,33 @@ impl Bobby {
                         }
                     }
                 }
+                // gray lock
+                32 => {
+                    map_data[new_pos] = 18;
+                    self.key_gray += 1;
+                }
+                33 if self.key_gray > 0 => {
+                    map_data[new_pos] = 18;
+                    self.key_gray -= 1;
+                }
+                // yellow lock
+                34 => {
+                    map_data[new_pos] = 18;
+                    self.key_yellow += 1;
+                }
+                35 if self.key_yellow > 0 => {
+                    map_data[new_pos] = 18;
+                    self.key_yellow -= 1;
+                }
+                // red lock
+                36 => {
+                    map_data[new_pos] = 18;
+                    self.key_red += 1;
+                }
+                37 if self.key_red > 0 => {
+                    map_data[new_pos] = 18;
+                    self.key_red -= 1;
+                }
                 _ => {}
             }
 
@@ -540,7 +592,7 @@ impl Bobby {
     }
 
     fn update_state(&mut self, state: State, frame: u32, map_data: &[u8]) {
-        println!("new state: {:?}", state);
+        // println!("new state: {:?}", state);
         self.start_frame = frame;
         self.state = state;
         self.update_dest(map_data);
@@ -580,7 +632,9 @@ impl Bobby {
         if new_item < 18
             || new_item == 31 // TODO: dead, remove this later
             // lock
-            || new_item == 33 || new_item == 35 || new_item == 37
+            || (new_item == 33 && self.key_gray == 0)
+            || (new_item == 35 && self.key_yellow == 0)
+            || (new_item == 37 && self.key_red == 0)
             // stop by sibling item
             || (new_item == 24 && (self.state == State::Right || self.state == State::Down))
             || (new_item == 25 && (self.state == State::Left || self.state == State::Down))
