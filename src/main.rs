@@ -49,10 +49,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let texture_creator = canvas.texture_creator();
     let mut event_pump = context.event_pump()?;
 
-    let assets = Assets::load_all(&texture_creator)?;
-    let mut bobby = Bobby::new(0, (map_info.start_idx % 16, map_info.start_idx / 16));
-
     let mut frame: u32 = 0;
+    let assets = Assets::load_all(&texture_creator)?;
+    let mut bobby = Bobby::new(frame, (map_info.start_idx % 16, map_info.start_idx / 16));
+
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
@@ -72,8 +72,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Keycode::Down => Some(State::Down),
                         Keycode::R => {
                             map_info = map_info_fresh.clone();
-                            bobby =
-                                Bobby::new(0, (map_info.start_idx % 16, map_info.start_idx / 16));
+                            bobby = Bobby::new(
+                                frame,
+                                (map_info.start_idx % 16, map_info.start_idx / 16),
+                            );
                             None
                         }
                         Keycode::N => {
@@ -83,8 +85,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .set_title(format!("Bobby Carrot ({})", map).as_str())?;
                             map_info_fresh = map.load_map_info()?;
                             map_info = map_info_fresh.clone();
-                            bobby =
-                                Bobby::new(0, (map_info.start_idx % 16, map_info.start_idx / 16));
+                            bobby = Bobby::new(
+                                frame,
+                                (map_info.start_idx % 16, map_info.start_idx / 16),
+                            );
                             None
                         }
                         Keycode::P => {
@@ -94,8 +98,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .set_title(format!("Bobby Carrot ({})", map).as_str())?;
                             map_info_fresh = map.load_map_info()?;
                             map_info = map_info_fresh.clone();
-                            bobby =
-                                Bobby::new(0, (map_info.start_idx % 16, map_info.start_idx / 16));
+                            bobby = Bobby::new(
+                                frame,
+                                (map_info.start_idx % 16, map_info.start_idx / 16),
+                            );
                             None
                         }
                         _ => None,
@@ -116,18 +122,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if bobby.is_finished(&map_info)
             && map_info.data[(bobby.coord_src.0 + bobby.coord_src.1 * 16) as usize] == 44
         {
-            map = map.next();
-            canvas
-                .window_mut()
-                .set_title(format!("Bobby Carrot ({})", map).as_str())?;
-            map_info_fresh = map.load_map_info()?;
-            map_info = map_info_fresh.clone();
-            bobby = Bobby::new(0, (map_info.start_idx % 16, map_info.start_idx / 16));
+            if bobby.faded_out {
+                map = map.next();
+                canvas
+                    .window_mut()
+                    .set_title(format!("Bobby Carrot ({})", map).as_str())?;
+                map_info_fresh = map.load_map_info()?;
+                map_info = map_info_fresh.clone();
+                bobby = Bobby::new(frame, (map_info.start_idx % 16, map_info.start_idx / 16));
+            } else if bobby.state != State::FadeOut {
+                bobby.start_frame = frame;
+                bobby.state = State::FadeOut;
+            }
         }
 
         let (bobby_src, bobby_dest) = bobby.update_texture_position(frame, &mut map_info.data);
         let bobby_texture = match bobby.state {
             State::Idle => &assets.bobby_idle_texture,
+            State::Death => &assets.bobby_death_texture,
+            State::FadeIn => &assets.bobby_fade_texture,
+            State::FadeOut => &assets.bobby_fade_texture,
             State::Left => &assets.bobby_left_texture,
             State::Right => &assets.bobby_right_texture,
             State::Up => &assets.bobby_up_texture,
@@ -148,7 +162,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     43 => &assets.tile_conveyor_down_texture,
                     _ => &assets.tileset_texture,
                 };
-                let src = if (item == 44 && finished) || (40..=43).contains(&item) {
+                let src = if (item == 44 && finished) || (40..44).contains(&item) {
                     Rect::new(32 * ((frame as i32 / (FRAMES as i32 / 10)) % 4), 0, 32, 32)
                 } else {
                     Rect::new(32 * (item % 8), 32 * (item / 8), 32, 32)
@@ -218,7 +232,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &assets.numbers_texture,
             Some(Rect::new(num_10 * 12, 0, 12, 18)),
             Some(Rect::new(
-                32 * 16 - (icon_width + 4) - 2 - 12 * 2,
+                32 * 16 - (icon_width + 4) - 2 - 12 * 2 - 1,
                 4 + 14,
                 12,
                 18,
@@ -425,11 +439,15 @@ struct Bobby {
     key_yellow: usize,
     key_red: usize,
     view_mode: bool,
+    faded_out: bool,
 }
 
 #[derive(Debug, Eq, PartialEq)]
 enum State {
     Idle,
+    Death,
+    FadeIn,
+    FadeOut,
     Left,
     Right,
     Up,
@@ -439,7 +457,7 @@ enum State {
 impl Bobby {
     pub fn new(start_frame: u32, coord_src: (u32, u32)) -> Bobby {
         Bobby {
-            state: State::Down,
+            state: State::FadeIn,
             next_state: None,
             start_frame,
             coord_src,
@@ -451,6 +469,7 @@ impl Bobby {
             key_yellow: 0,
             key_red: 0,
             view_mode: false,
+            faded_out: false,
         }
     }
 
@@ -469,6 +488,36 @@ impl Bobby {
                     36,
                     50,
                 );
+                return (src, dest);
+            }
+            State::Death => {
+                todo!()
+            }
+            State::FadeIn => {
+                let src = Rect::new((8 - step as i32) * 36, 0, 36, 50);
+                let dest = Rect::new(
+                    self.coord_src.0 as i32 * 32 + 16 - (36 / 2),
+                    self.coord_src.1 as i32 * 32 + 16 - (50 - 32 / 2),
+                    36,
+                    50,
+                );
+                if step >= 8 {
+                    self.start_frame = frame;
+                    self.state = State::Down;
+                }
+                return (src, dest);
+            }
+            State::FadeOut => {
+                let src = Rect::new(step as i32 * 36, 0, 36, 50);
+                let dest = Rect::new(
+                    self.coord_src.0 as i32 * 32 + 16 - (36 / 2),
+                    self.coord_src.1 as i32 * 32 + 16 - (50 - 32 / 2),
+                    36,
+                    50,
+                );
+                if step >= 8 {
+                    self.faded_out = true;
+                }
                 return (src, dest);
             }
             State::Left => {
@@ -572,7 +621,10 @@ impl Bobby {
                 28 => map_data[old_pos] = 29,
                 29 => map_data[old_pos] = 28,
                 30 => map_data[old_pos] = 31,
-                45 => map_data[old_pos] = 46,
+                45 => {
+                    map_data[old_pos] = 46;
+                    self.egg_count += 1;
+                }
                 _ => {
                     // TODO
                 }
@@ -607,26 +659,6 @@ impl Bobby {
                 }
                 // TODO: dead
                 31 => {}
-                // yellow switch
-                38 => {
-                    for x in 0..WIDTH_POINTS {
-                        for y in 0..HEIGHT_POINTS {
-                            let pos = x as usize + y as usize * 16;
-                            match map_data[pos] {
-                                // switch
-                                38 => map_data[pos] = 39,
-                                39 => map_data[pos] = 38,
-                                // left / right
-                                40 => map_data[pos] = 41,
-                                41 => map_data[pos] = 40,
-                                // up / down
-                                42 => map_data[pos] = 43,
-                                43 => map_data[pos] = 42,
-                                _ => {}
-                            }
-                        }
-                    }
-                }
                 // gray lock
                 32 => {
                     map_data[new_pos] = 18;
@@ -654,6 +686,27 @@ impl Bobby {
                     map_data[new_pos] = 18;
                     self.key_red -= 1;
                 }
+                // yellow switch
+                38 => {
+                    for x in 0..WIDTH_POINTS {
+                        for y in 0..HEIGHT_POINTS {
+                            let pos = x as usize + y as usize * 16;
+                            match map_data[pos] {
+                                // switch
+                                38 => map_data[pos] = 39,
+                                39 => map_data[pos] = 38,
+                                // left / right
+                                40 => map_data[pos] = 41,
+                                41 => map_data[pos] = 40,
+                                // up / down
+                                42 => map_data[pos] = 43,
+                                43 => map_data[pos] = 42,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                // flow
                 40 => self.next_state = Some(State::Left),
                 41 => self.next_state = Some(State::Right),
                 42 => self.next_state = Some(State::Up),
@@ -727,7 +780,6 @@ impl Bobby {
         let new_item = map_data[new_pos];
         // The target position is forbidden
         if new_item < 18
-            || new_item == 31 // TODO: dead, remove this later
             // lock
             || (new_item == 33 && self.key_gray == 0)
             || (new_item == 35 && self.key_yellow == 0)
@@ -763,6 +815,8 @@ impl Bobby {
             || (old_item == 43 && self.state == State::Up)
         {
             self.coord_dest = old_dest;
+        } else if new_item == 31 {
+            self.state = State::Death;
         }
     }
 }
