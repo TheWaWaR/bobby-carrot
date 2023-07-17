@@ -1,0 +1,51 @@
+<!DOCTYPE>
+<html>
+<head>
+    <meta charset="utf-8"/>
+	<link href='https://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css'/>
+    <title>Bobby Carrot</title>
+    <style>
+        body { 
+            margin: 0;
+            padding: 0;
+            color: #eef;
+            background-color:#000000;
+         }
+        div#game {
+            width: 320px; height: 384px; 
+            margin: auto; margin-top: 20px;
+        }
+        div#info {
+            width: 320px;
+            margin: auto; margin-top: 10px;
+        }
+		a {
+			color : #844;
+			text-decoration : none;
+		}        
+        p {
+            color: #888;
+            font-family: 'Open Sans', sans-serif;
+        }
+        canvas#webgl { 
+            width:100%;
+            height:100%; 
+            border-radius: 6px;
+        } 
+    </style>
+</head>
+<body>
+    <div id="game">
+        <canvas id="webgl"></canvas>
+    </div>
+    <div id="info">
+        <p>
+            <b>Arrows</b> : Move / <b>R</b> : Restart Level
+            <br/>
+            -  
+            <i>A Game cloned by <a href="https://github.com/TheWaWaR">@TheWaWaR</a></i>
+        </p>
+    </div>
+    <script type="text/javascript" src="bobby-carrot.js"></script>
+</body>
+</html>

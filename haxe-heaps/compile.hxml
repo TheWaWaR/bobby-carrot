@@ -1,0 +1,9 @@
+-cp src
+-lib heaps
+# -lib hlsdl
+# -hl bobby-carrot.hl
+# -hl out/main.c
+-js bobby-carrot.js
+-D windowSize=512x512
+-main Main
+-debug
