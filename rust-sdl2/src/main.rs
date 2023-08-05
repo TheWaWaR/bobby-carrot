@@ -49,16 +49,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let video_subsystem = context.video()?;
     let timer = context.timer()?;
 
+    #[cfg(target_os = "linux")]
+    let scale = 2.0;
+    #[cfg(not(target_os = "linux"))]
+    let scale = 1.0;
+
     let mut show_help = false;
     let mut full_view = false;
     let window = video_subsystem
         .window(
             format!("Bobby Carrot ({})", map).as_str(),
-            VIEW_WIDTH,
-            VIEW_HEIGHT,
+            (VIEW_WIDTH as f32 * scale) as u32,
+            (VIEW_HEIGHT as f32 * scale) as u32,
         )
         .build()?;
     let mut canvas = window.into_canvas().present_vsync().build()?;
+    canvas.set_scale(scale, scale)?;
     canvas.set_blend_mode(BlendMode::Blend);
     let texture_creator = canvas.texture_creator();
     let mut event_pump = context.event_pump()?;
