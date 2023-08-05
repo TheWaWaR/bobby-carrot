@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) void {
     const exe = jok.createGame(
         b,
         "bobby-carrot",
-        "src/main.zig",
+        "src/game.zig",
         target,
         optimize,
         .{},
@@ -56,7 +56,7 @@ pub fn build(b: *std.Build) void {
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = .{ .path = "src/game.zig" },
         .target = target,
         .optimize = optimize,
     });
