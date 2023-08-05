@@ -1,3 +1,4 @@
+const std = @import("std");
 const jok = @import("jok");
 const sdl = jok.sdl;
 const j2d = jok.j2d;
@@ -37,7 +38,6 @@ pub const Bobby = struct {
     }
 
     pub fn event(self: *Self, ctx: jok.Context, e: sdl.Event) !void {
-        _ = ctx;
         const key_down = switch (e) {
             .key_down => |key| blk: {
                 break :blk key;
@@ -46,13 +46,45 @@ pub const Bobby = struct {
         };
         if (key_down) |key| {
             if (self.state != .death and self.state != .fade_in and self.state != .fade_out and self.next_state != .death and self.next_state != .fade_out) {
-                self.next_state = switch (key.scancode) {
+                const next_state: ?State = switch (key.scancode) {
                     .left => .left,
                     .right => .right,
                     .up => .up,
                     .down => .down,
-                    else => self.next_state,
+                    else => null,
                 };
+                if (next_state) |state| {
+                    self.last_action_time = ctx.seconds();
+                    self.next_state = state;
+                }
+            }
+        }
+
+        if (self.next_state) |next_state| {
+            if (self.moving_target == null) {
+                switch (next_state) {
+                    .left => {
+                        self.state = .left;
+                        self.anim = "bobby_left";
+                        self.anim_loop = true;
+                    },
+                    .right => {
+                        self.state = .right;
+                        self.anim = "bobby_right";
+                        self.anim_loop = true;
+                    },
+                    .up => {
+                        self.state = .up;
+                        self.anim = "bobby_up";
+                        self.anim_loop = true;
+                    },
+                    .down => {
+                        self.state = .down;
+                        self.anim = "bobby_down";
+                        self.anim_loop = true;
+                    },
+                    else => {},
+                }
             }
         }
     }
@@ -74,7 +106,6 @@ pub const Bobby = struct {
         if (self.anim_loop and try self.as.isOver(self.anim)) {
             try self.as.reset(self.anim);
         }
-        self.as.update(ctx.deltaSeconds());
     }
 
     pub fn draw(self: *Self, ctx: jok.Context) !void {
@@ -85,7 +116,7 @@ pub const Bobby = struct {
                 .x = @floatFromInt(self.current_pos.x * 32 + 16 - 18),
                 .y = @floatFromInt(self.current_pos.y * 32 + 16 - (50 - 16)),
             },
-            .depth = 0.8,
+            .depth = 0.2,
         });
     }
 };

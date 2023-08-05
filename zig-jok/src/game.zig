@@ -57,7 +57,6 @@ pub fn init(ctx: jok.Context) !void {
     tileset = sheet.getSpriteByName("tileset").?;
     as = try j2d.AnimationSystem.create(ctx.allocator());
     const bobby_idle = sheet.getSpriteByName("bobby_idle").?;
-    const bobby_down = sheet.getSpriteByName("bobby_down").?;
     try as.add(
         "bobby_idle",
         &[_]j2d.Sprite{
@@ -68,26 +67,53 @@ pub fn init(ctx: jok.Context) !void {
         120.0 / 8,
         true,
     );
-    try as.add(
+    inline for (.{
+        "bobby_left",
+        "bobby_right",
+        "bobby_up",
         "bobby_down",
-        &[_]j2d.Sprite{
-            bobby_down.getSubSprite(0 * 36, 0, 36, 50),
-            bobby_down.getSubSprite(1 * 36, 0, 36, 50),
-            bobby_down.getSubSprite(2 * 36, 0, 36, 50),
-            bobby_down.getSubSprite(3 * 36, 0, 36, 50),
-            bobby_down.getSubSprite(4 * 36, 0, 36, 50),
-            bobby_down.getSubSprite(5 * 36, 0, 36, 50),
-            bobby_down.getSubSprite(6 * 36, 0, 36, 50),
-            bobby_down.getSubSprite(7 * 36, 0, 36, 50),
-        },
-        120.0 / 8,
-        false,
-    );
+    }) |name| {
+        const sprite = sheet.getSpriteByName(name).?;
+        try as.add(
+            name,
+            &[_]j2d.Sprite{
+                sprite.getSubSprite(0 * 36, 0, 36, 50),
+                sprite.getSubSprite(1 * 36, 0, 36, 50),
+                sprite.getSubSprite(2 * 36, 0, 36, 50),
+                sprite.getSubSprite(3 * 36, 0, 36, 50),
+                sprite.getSubSprite(4 * 36, 0, 36, 50),
+                sprite.getSubSprite(5 * 36, 0, 36, 50),
+                sprite.getSubSprite(6 * 36, 0, 36, 50),
+                sprite.getSubSprite(7 * 36, 0, 36, 50),
+            },
+            180.0 / 8.0,
+            false,
+        );
+    }
+    inline for (.{
+        "tile_conveyor_left",
+        "tile_conveyor_right",
+        "tile_conveyor_up",
+        "tile_conveyor_down",
+    }) |name| {
+        const sprite = sheet.getSpriteByName(name).?;
+        try as.add(
+            name,
+            &[_]j2d.Sprite{
+                sprite.getSubSprite(0 * 32, 0, 32, 32),
+                sprite.getSubSprite(1 * 32, 0, 32, 32),
+                sprite.getSubSprite(2 * 32, 0, 32, 32),
+                sprite.getSubSprite(3 * 32, 0, 32, 32),
+            },
+            45.0 / 4.0,
+            true,
+        );
+    }
 
     // Load level data
     const data = try std.fs.cwd().readFileAlloc(
         ctx.allocator(),
-        "assets/level/normal01.blm",
+        "assets/level/normal08.blm",
         512,
     );
     var start_pos: usize = 0;
@@ -125,6 +151,7 @@ pub fn event(ctx: jok.Context, e: sdl.Event) !void {
 
 pub fn update(ctx: jok.Context) !void {
     try bobby.update(ctx);
+    as.update(ctx.deltaSeconds());
 }
 
 pub fn draw(ctx: jok.Context) !void {
@@ -132,14 +159,31 @@ pub fn draw(ctx: jok.Context) !void {
     try j2d.begin(.{ .depth_sort = .back_to_forth });
 
     for (map_info.data, 0..) |byte, idx| {
-        const offset_x: f32 = @floatFromInt((byte % 8) * 32);
-        const offset_y: f32 = @floatFromInt((byte / 8) * 32);
         const pos_x: usize = (idx % 16) * 32;
         const pos_y: usize = (idx / 16) * 32;
-        try j2d.sprite(tileset.getSubSprite(offset_x, offset_y, 32, 32), .{
-            .pos = .{ .x = @floatFromInt(pos_x), .y = @floatFromInt(pos_y) },
-            .depth = 1.0,
-        });
+        var anim_opt = switch (byte) {
+            40 => "tile_conveyor_left",
+            41 => "tile_conveyor_right",
+            42 => "tile_conveyor_up",
+            43 => "tile_conveyor_down",
+            else => null,
+        };
+        if (anim_opt) |anim| {
+            if (try as.isOver(anim)) {
+                try as.reset(anim);
+            }
+            try j2d.sprite(try as.getCurrentFrame(anim), .{
+                .pos = .{ .x = @floatFromInt(pos_x), .y = @floatFromInt(pos_y) },
+                .depth = 0.8,
+            });
+        } else {
+            const offset_x: f32 = @floatFromInt((byte % 8) * 32);
+            const offset_y: f32 = @floatFromInt((byte / 8) * 32);
+            try j2d.sprite(tileset.getSubSprite(offset_x, offset_y, 32, 32), .{
+                .pos = .{ .x = @floatFromInt(pos_x), .y = @floatFromInt(pos_y) },
+                .depth = 1.0,
+            });
+        }
     }
 
     try bobby.draw(ctx);
