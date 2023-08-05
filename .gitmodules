@@ -1,0 +1,3 @@
+[submodule "zig-jok/libs/jok"]
+	path = zig-jok/libs/jok
+	url = https://github.com/Jack-Ji/jok.git
