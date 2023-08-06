@@ -3,6 +3,7 @@ const jok = @import("jok");
 const sdl = jok.sdl;
 const j2d = jok.j2d;
 const Bobby = @import("Bobby.zig");
+const Animation = j2d.AnimationSystem.Animation;
 
 const width_points: u32 = 16;
 const height_points: u32 = 16;
@@ -160,7 +161,7 @@ pub fn init(ctx: jok.Context) !void {
                 sprite.getSubSprite(2 * 32, 0, 32, 32),
                 sprite.getSubSprite(3 * 32, 0, 32, 32),
             },
-            45.0 / 4.0,
+            16.0,
             true,
         );
     }
@@ -244,6 +245,7 @@ pub fn draw(ctx: jok.Context) !void {
     // your 2d drawing
     try j2d.begin(.{ .depth_sort = .back_to_forth });
 
+    var anim_list: [5]?*Animation = .{ null, null, null, null, null };
     for (map_info.?.data(), 0..) |byte, idx| {
         var anim_opt: ?[:0]const u8 = switch (byte) {
             40 => "tile_conveyor_left",
@@ -257,9 +259,8 @@ pub fn draw(ctx: jok.Context) !void {
         const pos_y: f32 = @floatFromInt((idx / 16) * 32);
         if (anim_opt) |name| {
             var anim = as.animations.getPtr(name).?;
-            if (anim.is_over) anim.reset();
             try j2d.sprite(anim.getCurrentFrame(), .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 0.8 });
-            anim.update(ctx.deltaSeconds());
+            anim_list[@as(usize, byte) - 40] = anim;
         } else {
             const offset_x: f32 = @floatFromInt((byte % 8) * 32);
             const offset_y: f32 = @floatFromInt((byte / 8) * 32);
@@ -267,6 +268,11 @@ pub fn draw(ctx: jok.Context) !void {
                 tileset.getSubSprite(offset_x, offset_y, 32, 32),
                 .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 1.0 },
             );
+        }
+    }
+    for (anim_list) |anim_opt| {
+        if (anim_opt) |anim| {
+            anim.update(ctx.deltaSeconds());
         }
     }
 
