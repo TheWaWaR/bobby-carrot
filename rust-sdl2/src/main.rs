@@ -6,7 +6,7 @@ use std::time::Duration;
 use sdl2::{
     event::Event,
     image::LoadTexture,
-    keyboard::Keycode,
+    keyboard::{Keycode, Scancode},
     pixels::Color,
     rect::Rect,
     render::{BlendMode, Texture, TextureCreator},
@@ -89,15 +89,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if code != Keycode::H && code != Keycode::F1 {
                         show_help = false;
                     }
-                    let state_opt = match code {
-                        Keycode::Left => Some(State::Left),
-                        Keycode::Right => Some(State::Right),
-                        Keycode::Up => Some(State::Up),
-                        Keycode::Down => Some(State::Down),
+                    match code {
                         Keycode::R => {
                             map_info = map_info_fresh.clone();
                             bobby = Bobby::new(frame, now_ms, map_info.coord_start);
-                            None
                         }
                         Keycode::N => {
                             map = map.next();
@@ -107,7 +102,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             map_info_fresh = map.load_map_info()?;
                             map_info = map_info_fresh.clone();
                             bobby = Bobby::new(frame, now_ms, map_info.coord_start);
-                            None
                         }
                         Keycode::P => {
                             map = map.previous();
@@ -117,7 +111,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             map_info_fresh = map.load_map_info()?;
                             map_info = map_info_fresh.clone();
                             bobby = Bobby::new(frame, now_ms, map_info.coord_start);
-                            None
                         }
                         Keycode::F => {
                             full_view = !full_view;
@@ -126,24 +119,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             } else {
                                 canvas.window_mut().set_size(VIEW_WIDTH, VIEW_HEIGHT)?;
                             }
-                            None
                         }
                         Keycode::H | Keycode::F1 => {
                             show_help = !show_help;
-                            None
                         }
-                        _ => None,
-                    };
-                    if let Some(state) = state_opt {
-                        bobby.last_action_time = now_ms;
-                        if !bobby.is_walking() {
-                            bobby.update_state(state, frame, &map_info.data);
-                        } else {
-                            bobby.update_next_state(state, frame);
-                        }
+                        _ => {}
                     }
                 }
                 _ => {}
+            }
+        }
+        let keyboard = event_pump.keyboard_state();
+        let state_opt = if keyboard.is_scancode_pressed(Scancode::Left) {
+            Some(State::Left)
+        } else if keyboard.is_scancode_pressed(Scancode::Right) {
+            Some(State::Right)
+        } else if keyboard.is_scancode_pressed(Scancode::Up) {
+            Some(State::Up)
+        } else if keyboard.is_scancode_pressed(Scancode::Down) {
+            Some(State::Down)
+        } else {
+            None
+        };
+        if let Some(state) = state_opt {
+            bobby.last_action_time = now_ms;
+            if !bobby.is_walking() {
+                bobby.update_state(state, frame, &map_info.data);
+            } else {
+                bobby.update_next_state(state, frame);
             }
         }
 
