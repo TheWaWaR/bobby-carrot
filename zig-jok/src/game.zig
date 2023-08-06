@@ -2,7 +2,7 @@ const std = @import("std");
 const jok = @import("jok");
 const sdl = jok.sdl;
 const j2d = jok.j2d;
-const Bobby = @import("bobby.zig").Bobby;
+const Bobby = @import("Bobby.zig");
 
 const width_points: u32 = 16;
 const height_points: u32 = 16;
@@ -19,15 +19,19 @@ var as: *j2d.AnimationSystem = undefined;
 var tileset: j2d.Sprite = undefined;
 
 var bobby: Bobby = undefined;
-var map_info: MapInfo = undefined;
+var map_info: ?MapInfo = null;
+var currentLevel: usize = 0;
 
-const MapInfo = struct {
+pub const MapInfo = struct {
     data_origin: []const u8,
-    data: []const u8,
-    start_pos: usize,
-    end_pos: usize,
+    start_idx: usize,
+    end_idx: usize,
     carrot_total: usize,
     egg_total: usize,
+
+    pub fn data(info: *const MapInfo) []const u8 {
+        return info.data_origin[4..];
+    }
 };
 
 // ==== Game Engine variables and functions
@@ -44,6 +48,7 @@ pub fn init(ctx: jok.Context) !void {
     std.log.info("game init", .{});
     try ctx.renderer().setScale(scale, scale);
 
+    // Setup animations
     const size = ctx.getFramebufferSize();
     sheet = try j2d.SpriteSheet.fromPicturesInDir(
         ctx,
@@ -57,6 +62,8 @@ pub fn init(ctx: jok.Context) !void {
     tileset = sheet.getSpriteByName("tileset").?;
     as = try j2d.AnimationSystem.create(ctx.allocator());
     const bobby_idle = sheet.getSpriteByName("bobby_idle").?;
+    const bobby_fade = sheet.getSpriteByName("bobby_fade").?;
+    const bobby_death = sheet.getSpriteByName("bobby_death").?;
     try as.add(
         "bobby_idle",
         &[_]j2d.Sprite{
@@ -66,6 +73,53 @@ pub fn init(ctx: jok.Context) !void {
         },
         120.0 / 8,
         true,
+    );
+    try as.add(
+        "fade_in",
+        &[_]j2d.Sprite{
+            bobby_fade.getSubSprite(8 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(7 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(6 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(5 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(4 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(3 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(2 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(1 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(0 * 36, 0, 36, 50),
+        },
+        180.0 / 8.0,
+        false,
+    );
+    try as.add(
+        "fade_out",
+        &[_]j2d.Sprite{
+            bobby_fade.getSubSprite(0 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(1 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(2 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(3 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(4 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(5 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(6 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(7 * 36, 0, 36, 50),
+            bobby_fade.getSubSprite(8 * 36, 0, 36, 50),
+        },
+        180.0 / 8.0,
+        false,
+    );
+    try as.add(
+        "bobby_death",
+        &[_]j2d.Sprite{
+            bobby_death.getSubSprite(0 * 44, 0, 44, 54),
+            bobby_death.getSubSprite(1 * 44, 0, 44, 54),
+            bobby_death.getSubSprite(2 * 44, 0, 44, 54),
+            bobby_death.getSubSprite(3 * 44, 0, 44, 54),
+            bobby_death.getSubSprite(4 * 44, 0, 44, 54),
+            bobby_death.getSubSprite(5 * 44, 0, 44, 54),
+            bobby_death.getSubSprite(6 * 44, 0, 44, 54),
+            bobby_death.getSubSprite(7 * 44, 0, 44, 54),
+        },
+        180.0 / 8.0,
+        false,
     );
     inline for (.{
         "bobby_left",
@@ -87,7 +141,7 @@ pub fn init(ctx: jok.Context) !void {
                 sprite.getSubSprite(7 * 36, 0, 36, 50),
             },
             180.0 / 8.0,
-            false,
+            true,
         );
     }
     inline for (.{
@@ -110,41 +164,74 @@ pub fn init(ctx: jok.Context) !void {
         );
     }
 
+    try initLevel(ctx);
+}
+
+fn initLevel(ctx: jok.Context) !void {
+    var buf: [64]u8 = undefined;
+    const filename = if (currentLevel < 30) blk: {
+        break :blk try std.fmt.bufPrint(&buf, "assets/level/normal{d:0>2}.blm", .{currentLevel + 1});
+    } else blk: {
+        break :blk try std.fmt.bufPrint(&buf, "assets/level/egg{d:0>2}.blm", .{currentLevel - 30 + 1});
+    };
+    std.log.info("filename: {s}", .{filename});
+
+    if (map_info) |info| {
+        ctx.allocator().free(info.data_origin);
+    }
+
     // Load level data
-    const data = try std.fs.cwd().readFileAlloc(
-        ctx.allocator(),
-        "assets/level/normal08.blm",
-        512,
-    );
-    var start_pos: usize = 0;
-    var end_pos: usize = 0;
+    const data = try std.fs.cwd().readFileAlloc(ctx.allocator(), filename, 512);
+    var start_idx: usize = 0;
+    var end_idx: usize = 0;
     var carrot_total: usize = 0;
     var egg_total: usize = 0;
     for (data[4..], 0..) |byte, idx| {
         switch (byte) {
             19 => carrot_total += 1,
-            21 => start_pos = idx,
-            44 => end_pos = idx,
+            21 => start_idx = idx,
+            44 => end_idx = idx,
             45 => egg_total += 1,
             else => {},
         }
     }
     map_info = MapInfo{
         .data_origin = data,
-        .data = data[4..],
-        .start_pos = start_pos,
-        .end_pos = end_pos,
+        .start_idx = start_idx,
+        .end_idx = end_idx,
         .carrot_total = carrot_total,
         .egg_total = egg_total,
     };
     std.log.info("map_info: {any}", .{map_info});
 
-    bobby = Bobby.new(start_pos, ctx.seconds(), as);
+    bobby = Bobby.new(ctx.seconds(), map_info.?, as);
 }
 
 pub fn event(ctx: jok.Context, e: sdl.Event) !void {
-    if (ctx.isKeyPressed(.q)) {
-        ctx.kill();
+    if (bobby.dead) {
+        try initLevel(ctx);
+    } else if (bobby.faded_out) {
+        currentLevel = (currentLevel + 1) % 50;
+        try initLevel(ctx);
+    } else {
+        switch (e) {
+            .key_up => |key| {
+                switch (key.scancode) {
+                    .q => ctx.kill(),
+                    .n => {
+                        currentLevel = (currentLevel + 1) % 50;
+                        try initLevel(ctx);
+                    },
+                    .p => {
+                        currentLevel = (currentLevel + 49) % 50;
+                        try initLevel(ctx);
+                    },
+                    .r => try initLevel(ctx),
+                    else => {},
+                }
+            },
+            else => {},
+        }
     }
     try bobby.event(ctx, e);
 }
@@ -158,9 +245,7 @@ pub fn draw(ctx: jok.Context) !void {
     // your 2d drawing
     try j2d.begin(.{ .depth_sort = .back_to_forth });
 
-    for (map_info.data, 0..) |byte, idx| {
-        const pos_x: usize = (idx % 16) * 32;
-        const pos_y: usize = (idx / 16) * 32;
+    for (map_info.?.data(), 0..) |byte, idx| {
         var anim_opt = switch (byte) {
             40 => "tile_conveyor_left",
             41 => "tile_conveyor_right",
@@ -168,21 +253,21 @@ pub fn draw(ctx: jok.Context) !void {
             43 => "tile_conveyor_down",
             else => null,
         };
+        const pos_x: f32 = @floatFromInt((idx % 16) * 32);
+        const pos_y: f32 = @floatFromInt((idx / 16) * 32);
         if (anim_opt) |anim| {
-            if (try as.isOver(anim)) {
-                try as.reset(anim);
-            }
-            try j2d.sprite(try as.getCurrentFrame(anim), .{
-                .pos = .{ .x = @floatFromInt(pos_x), .y = @floatFromInt(pos_y) },
-                .depth = 0.8,
-            });
+            if (try as.isOver(anim)) try as.reset(anim);
+            try j2d.sprite(
+                try as.getCurrentFrame(anim),
+                .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 0.8 },
+            );
         } else {
             const offset_x: f32 = @floatFromInt((byte % 8) * 32);
             const offset_y: f32 = @floatFromInt((byte / 8) * 32);
-            try j2d.sprite(tileset.getSubSprite(offset_x, offset_y, 32, 32), .{
-                .pos = .{ .x = @floatFromInt(pos_x), .y = @floatFromInt(pos_y) },
-                .depth = 1.0,
-            });
+            try j2d.sprite(
+                tileset.getSubSprite(offset_x, offset_y, 32, 32),
+                .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 1.0 },
+            );
         }
     }
 
@@ -194,7 +279,7 @@ pub fn draw(ctx: jok.Context) !void {
 
 pub fn quit(ctx: jok.Context) void {
     std.log.info("game quit", .{});
-    ctx.allocator().free(map_info.data_origin);
+    ctx.allocator().free(map_info.?.data_origin);
     sheet.destroy();
     as.destroy();
 }
