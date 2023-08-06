@@ -140,7 +140,7 @@ pub fn init(ctx: jok.Context) !void {
                 sprite.getSubSprite(6 * 36, 0, 36, 50),
                 sprite.getSubSprite(7 * 36, 0, 36, 50),
             },
-            180.0 / 8.0,
+            30.0,
             true,
         );
     }
@@ -208,6 +208,7 @@ fn initLevel(ctx: jok.Context) !void {
 }
 
 pub fn event(ctx: jok.Context, e: sdl.Event) !void {
+    std.log.debug("[{}] game.event()", .{ctx.seconds()});
     switch (e) {
         .key_up => |key| {
             switch (key.scancode) {
@@ -270,13 +271,12 @@ pub fn draw(ctx: jok.Context) !void {
 
     try bobby.draw(ctx);
 
-    // ......
     try j2d.end();
 }
 
 pub fn quit(ctx: jok.Context) void {
     std.log.info("game quit", .{});
     ctx.allocator().free(map_info.?.data_origin);
-    sheet.destroy();
     as.destroy();
+    sheet.destroy();
 }

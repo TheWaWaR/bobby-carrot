@@ -48,39 +48,49 @@ pub fn new(start_time: f32, map_info: MapInfo, as: *j2d.AnimationSystem) Self {
 }
 
 pub fn event(self: *Self, ctx: jok.Context, e: sdl.Event) !void {
-    _ = ctx;
-    const key_down = switch (e) {
-        .key_down => |key| blk: {
-            break :blk key;
+    _ = self;
+    _ = e;
+    std.log.debug("[{}] Bobby.event()", .{ctx.seconds()});
+}
+
+pub fn update(self: *Self, ctx: jok.Context) !void {
+    const pos_ix: u32 = @intFromFloat(self.current_pos.x);
+    const pos_iy: u32 = @intFromFloat(self.current_pos.y);
+    std.log.debug(
+        "[{}] update(state={any}, next_state={any}, moving_target=({},{}), current_pos=({}, {}))",
+        .{
+            ctx.seconds(),
+            self.state,
+            self.next_state,
+            if (self.moving_target) |t| t.x else 0,
+            if (self.moving_target) |t| t.y else 0,
+            pos_ix,
+            pos_iy,
         },
-        else => null,
-    };
-    if (key_down) |key| {
-        if (self.state != .death and self.state != .fade_in and self.state != .fade_out // current state
-        and self.next_state != .death and self.next_state != .fade_out // next state
-        ) {
-            const next_state: ?State = switch (key.scancode) {
-                .left => .left,
-                .right => .right,
-                .up => .up,
-                .down => .down,
-                else => null,
-            };
-            if (next_state) |state| {
+    );
+    if (self.moving_target == null) {
+        const state_opt: ?State = if (ctx.isKeyPressed(.left) or ctx.isKeyPressed(.a)) .left // left
+        else if (ctx.isKeyPressed(.right) or ctx.isKeyPressed(.d)) .right // right
+        else if (ctx.isKeyPressed(.up) or ctx.isKeyPressed(.w)) .up // up
+        else if (ctx.isKeyPressed(.down) or ctx.isKeyPressed(.s)) .down //down
+        else null;
+        if (state_opt) |state| {
+            if (self.state != .death and self.state != .fade_in and self.state != .fade_out // current state
+            and self.next_state != .death and self.next_state != .fade_out // next state
+            ) {
+                std.log.info("[{}] new next state: {any}", .{ ctx.seconds(), state });
                 self.next_state = state;
             }
         }
     }
-}
 
-pub fn update(self: *Self, ctx: jok.Context) !void {
     if (ctx.seconds() - self.last_action_time >= 4.0 and self.state != .idle) {
         self.updateState(.idle);
     }
 
     const old_pos = self.current_pos;
     self.updateMovingTarget(ctx);
-    self.handleMoving();
+    self.handleMoving(ctx);
 
     // change camera position
     if ((old_pos.x != self.current_pos.x or old_pos.y != self.current_pos.y) and self.state != .death) {
@@ -89,16 +99,23 @@ pub fn update(self: *Self, ctx: jok.Context) !void {
 }
 
 pub fn draw(self: *Self, ctx: jok.Context) !void {
+    std.log.debug("[{}] draw()", .{ctx.seconds()});
     const sprite = if (self.state == .left or self.state == .right or self.state == .up or self.state == .down) blk: {
         if (self.moving_target == null) {
             break :blk self.anim.frames[self.anim.frames.len - 1];
         } else {
-            break :blk self.anim.getCurrentFrame();
+            const frame = self.anim.getCurrentFrame();
+            self.anim.update(ctx.deltaSeconds());
+            break :blk frame;
         }
-    } else self.anim.getCurrentFrame();
+    } else blk: {
+        const frame = self.anim.getCurrentFrame();
+        self.anim.update(ctx.deltaSeconds());
+        break :blk frame;
+    };
     std.log.debug(
-        "Bobby anim: name={s}, play_index={}, is_over={}",
-        .{ self.anim.name, self.anim.play_index, self.anim.is_over },
+        "[{}] Bobby anim: name={s}, play_index={}, is_over={}",
+        .{ ctx.seconds(), self.anim.name, self.anim.play_index, self.anim.is_over },
     );
     switch (self.state) {
         .death => {
@@ -124,8 +141,6 @@ pub fn draw(self: *Self, ctx: jok.Context) !void {
         else => {},
     }
     try j2d.sprite(sprite, .{ .pos = self.current_pos, .depth = 0.2 });
-
-    self.anim.update(ctx.deltaSeconds());
 }
 
 fn isFinished(self: *Self) bool {
@@ -190,32 +205,34 @@ fn updateMovingTarget(self: *Self, ctx: jok.Context) void {
             self.last_action_time = ctx.seconds();
             const old_item = self.map_data[self.current_coord.index()];
             const new_item = self.map_data[moving_target.index()];
+            const state = self.state;
             if (new_item < 18 // normal block
             or (new_item == 33 and self.key_gray == 0) // lock gray
             or (new_item == 35 and self.key_yellow == 0) // lock yellow
             or (new_item == 37 and self.key_red == 0) // lock red
-            or (new_item == 24 and (self.state == .right or self.state == .down)) // forbid: right + down
-            or (new_item == 25 and (self.state == .left or self.state == .down)) // forbid: left + down
-            or (new_item == 26 and (self.state == .left or self.state == .up)) // forbid: left + up
-            or (new_item == 27 and (self.state == .right or self.state == .up)) // forbid: right + up
-            or ((new_item == 28 or new_item == 40 or new_item == 41) and (self.state == .up or self.state == .down)) // forbid: up + down
-            or ((new_item == 29 or new_item == 42 or new_item == 43) and (self.state == .left or self.state == .right)) // forbid: left + right
-            or (new_item == 40 and self.state == .right) // forbid: right
-            or (new_item == 41 and self.state == .left) // forbid: left
-            or (new_item == 42 and self.state == .down) // forbid: down
-            or (new_item == 43 and self.state == .up) // forbid: up
+            or (new_item == 24 and (state == .right or state == .down)) // forbid: right + down
+            or (new_item == 25 and (state == .left or state == .down)) // forbid: left + down
+            or (new_item == 26 and (state == .left or state == .up)) // forbid: left + up
+            or (new_item == 27 and (state == .right or state == .up)) // forbid: right + up
+            or ((new_item == 28 or new_item == 40 or new_item == 41) and (state == .up or state == .down)) // forbid: up + down
+            or ((new_item == 29 or new_item == 42 or new_item == 43) and (state == .left or state == .right)) // forbid: left + right
+            or (new_item == 40 and state == .right) // forbid: right
+            or (new_item == 41 and state == .left) // forbid: left
+            or (new_item == 42 and state == .down) // forbid: down
+            or (new_item == 43 and state == .up) // forbid: up
             or (new_item == 46) // egg
-            or (old_item == 24 and (self.state == .left or self.state == .up)) // forbid: left + up
-            or (old_item == 25 and (self.state == .right or self.state == .up)) // forbid: right + up
-            or (old_item == 26 and (self.state == .right or self.state == .down)) // forbid: right + down
-            or (old_item == 27 and (self.state == .left or self.state == .down)) // forbid: left + down
-            or ((old_item == 28 or old_item == 40 or old_item == 41) and (self.state == .up or self.state == .down)) // forbid: up + down
-            or ((old_item == 29 or old_item == 42 or old_item == 43) and (self.state == .left or self.state == .right)) // forbid: left + right
-            or (old_item == 40 and self.state == .right) // forbid: right
-            or (old_item == 41 and self.state == .left) // forbid: left
-            or (old_item == 42 and self.state == .down) // forbid: down
-            or (old_item == 43 and self.state == .up) // forbid: up
+            or (old_item == 24 and (state == .left or state == .up)) // forbid: left + up
+            or (old_item == 25 and (state == .right or state == .up)) // forbid: right + up
+            or (old_item == 26 and (state == .right or state == .down)) // forbid: right + down
+            or (old_item == 27 and (state == .left or state == .down)) // forbid: left + down
+            or ((old_item == 28 or old_item == 40 or old_item == 41) and (state == .up or state == .down)) // forbid: up + down
+            or ((old_item == 29 or old_item == 42 or old_item == 43) and (state == .left or state == .right)) // forbid: left + right
+            or (old_item == 40 and state == .right) // forbid: right
+            or (old_item == 41 and state == .left) // forbid: left
+            or (old_item == 42 and state == .down) // forbid: down
+            or (old_item == 43 and state == .up) // forbid: up
             ) {
+                std.log.debug("RESET moving target (check item)", .{});
                 self.moving_target = null;
             } else {
                 if (new_item == 31) {
@@ -226,7 +243,7 @@ fn updateMovingTarget(self: *Self, ctx: jok.Context) void {
     }
 }
 
-fn handleMoving(self: *Self) void {
+fn handleMoving(self: *Self, ctx: jok.Context) void {
     if (self.moving_target) |moving_target| {
         const cx: f32 = @floatFromInt(self.current_coord.x);
         const cy: f32 = @floatFromInt(self.current_coord.y);
@@ -239,18 +256,21 @@ fn handleMoving(self: *Self) void {
             self.current_pos.x = 32.0 * (x + 0.5) - 44.0 / 2.0;
             self.current_pos.y = 32.0 * (y + 0.5) - (54.0 - 32.0 / 2.0);
             self.anim.frame_interval = 1.0 / 10.0;
+            std.log.debug("RESET moving target (death)", .{});
             self.moving_target = null;
             self.next_state = null;
         } else {
-            const dp: f32 = 32.0 / 12.0;
+            const dp: f32 = 32.0 / 16.0;
             const target_x: f32 = 32.0 * (tx + 0.5) - 18.0;
             const target_y: f32 = 32.0 * (ty + 0.5) - (50.0 - 16.0);
             const old_coord = self.current_coord;
+            std.log.debug("[{}] moving", .{ctx.seconds()});
             if (moving_target.x > self.current_coord.x) {
                 self.current_pos.x += dp;
                 if (self.current_pos.x >= target_x) {
                     self.current_pos.x = target_x;
                     self.current_coord.x = moving_target.x;
+                    std.log.debug("RESET moving target (right)", .{});
                     self.moving_target = null;
                 }
             } else if (moving_target.x < self.current_coord.x) {
@@ -258,6 +278,7 @@ fn handleMoving(self: *Self) void {
                 if (self.current_pos.x <= target_x) {
                     self.current_pos.x = target_x;
                     self.current_coord.x = moving_target.x;
+                    std.log.debug("RESET moving target (left)", .{});
                     self.moving_target = null;
                 }
             } else if (moving_target.y > self.current_coord.y) {
@@ -265,6 +286,7 @@ fn handleMoving(self: *Self) void {
                 if (self.current_pos.y >= target_y) {
                     self.current_pos.y = target_y;
                     self.current_coord.y = moving_target.y;
+                    std.log.debug("RESET moving target (down)", .{});
                     self.moving_target = null;
                 }
             } else if (moving_target.y < self.current_coord.y) {
@@ -272,6 +294,7 @@ fn handleMoving(self: *Self) void {
                 if (self.current_pos.y <= target_y) {
                     self.current_pos.y = target_y;
                     self.current_coord.y = moving_target.y;
+                    std.log.debug("RESET moving target (up)", .{});
                     self.moving_target = null;
                 }
             }
