@@ -145,6 +145,7 @@ pub fn init(ctx: jok.Context) !void {
         );
     }
     inline for (.{
+        "tile_finish",
         "tile_conveyor_left",
         "tile_conveyor_right",
         "tile_conveyor_up",
@@ -208,7 +209,6 @@ fn initLevel(ctx: jok.Context) !void {
 }
 
 pub fn event(ctx: jok.Context, e: sdl.Event) !void {
-    std.log.debug("[{}] game.event()", .{ctx.seconds()});
     switch (e) {
         .key_up => |key| {
             switch (key.scancode) {
@@ -245,11 +245,12 @@ pub fn draw(ctx: jok.Context) !void {
     try j2d.begin(.{ .depth_sort = .back_to_forth });
 
     for (map_info.?.data(), 0..) |byte, idx| {
-        var anim_opt = switch (byte) {
+        var anim_opt: ?[:0]const u8 = switch (byte) {
             40 => "tile_conveyor_left",
             41 => "tile_conveyor_right",
             42 => "tile_conveyor_up",
             43 => "tile_conveyor_down",
+            44 => if (bobby.isFinished()) "tile_finish" else null,
             else => null,
         };
         const pos_x: f32 = @floatFromInt((idx % 16) * 32);
