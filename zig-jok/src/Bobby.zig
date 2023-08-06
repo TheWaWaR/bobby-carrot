@@ -47,6 +47,87 @@ pub fn new(start_time: f32, map_info: MapInfo, as: *j2d.AnimationSystem) Self {
     };
 }
 
+pub fn event(self: *Self, ctx: jok.Context, e: sdl.Event) !void {
+    _ = ctx;
+    const key_down = switch (e) {
+        .key_down => |key| blk: {
+            break :blk key;
+        },
+        else => null,
+    };
+    if (key_down) |key| {
+        if (self.state != .death and self.state != .fade_in and self.state != .fade_out // current state
+        and self.next_state != .death and self.next_state != .fade_out // next state
+        ) {
+            const next_state: ?State = switch (key.scancode) {
+                .left => .left,
+                .right => .right,
+                .up => .up,
+                .down => .down,
+                else => null,
+            };
+            if (next_state) |state| {
+                self.next_state = state;
+            }
+        }
+    }
+}
+
+pub fn update(self: *Self, ctx: jok.Context) !void {
+    if (ctx.seconds() - self.last_action_time >= 4.0 and self.state != .idle) {
+        self.updateState(.idle);
+    }
+
+    const old_pos = self.current_pos;
+    self.updateMovingTarget(ctx);
+    self.handleMoving();
+
+    // change camera position
+    if ((old_pos.x != self.current_pos.x or old_pos.y != self.current_pos.y) and self.state != .death) {
+        // TODO
+    }
+}
+
+pub fn draw(self: *Self, ctx: jok.Context) !void {
+    const sprite = if (self.state == .left or self.state == .right or self.state == .up or self.state == .down) blk: {
+        if (self.moving_target == null) {
+            break :blk self.anim.frames[self.anim.frames.len - 1];
+        } else {
+            break :blk self.anim.getCurrentFrame();
+        }
+    } else self.anim.getCurrentFrame();
+    std.log.debug(
+        "Bobby anim: name={s}, play_index={}, is_over={}",
+        .{ self.anim.name, self.anim.play_index, self.anim.is_over },
+    );
+    switch (self.state) {
+        .death => {
+            if (self.anim.is_over) {
+                self.anim.reset();
+                self.dead = true;
+            } else if (self.anim.play_index == self.anim.frames.len - 1) {
+                self.anim.frame_interval = 1.0 / 2.0;
+            }
+        },
+        .fade_in => {
+            if (self.anim.is_over) {
+                self.anim.reset();
+                self.updateState(.down);
+            }
+        },
+        .fade_out => {
+            if (self.anim.is_over) {
+                self.anim.reset();
+                self.faded_out = true;
+            }
+        },
+        else => {},
+    }
+    try j2d.sprite(sprite, .{ .pos = self.current_pos, .depth = 0.2 });
+
+    self.anim.update(ctx.deltaSeconds());
+}
+
 fn isFinished(self: *Self) bool {
     if (self.carrot_total > 0) {
         return self.carrot_count == self.carrot_total;
@@ -161,7 +242,7 @@ fn handleMoving(self: *Self) void {
             self.moving_target = null;
             self.next_state = null;
         } else {
-            const dp: f32 = 32.0 / 20.0;
+            const dp: f32 = 32.0 / 12.0;
             const target_x: f32 = 32.0 * (tx + 0.5) - 18.0;
             const target_y: f32 = 32.0 * (ty + 0.5) - (50.0 - 16.0);
             const old_coord = self.current_coord;
@@ -303,80 +384,6 @@ fn handleMoving(self: *Self) void {
             }
         }
     }
-}
-
-pub fn event(self: *Self, ctx: jok.Context, e: sdl.Event) !void {
-    _ = ctx;
-    const key_down = switch (e) {
-        .key_down => |key| blk: {
-            break :blk key;
-        },
-        else => null,
-    };
-    if (key_down) |key| {
-        if (self.state != .death and self.state != .fade_in and self.state != .fade_out // current state
-        and self.next_state != .death and self.next_state != .fade_out // next state
-        ) {
-            const next_state: ?State = switch (key.scancode) {
-                .left => .left,
-                .right => .right,
-                .up => .up,
-                .down => .down,
-                else => null,
-            };
-            if (next_state) |state| {
-                self.next_state = state;
-            }
-        }
-    }
-}
-
-pub fn update(self: *Self, ctx: jok.Context) !void {
-    if (ctx.seconds() - self.last_action_time >= 4.0 and self.state != .idle) {
-        self.updateState(.idle);
-    }
-
-    const old_pos = self.current_pos;
-    self.updateMovingTarget(ctx);
-    self.handleMoving();
-
-    // change camera position
-    if ((old_pos.x != self.current_pos.x or old_pos.y != self.current_pos.y) and self.state != .death) {
-        // TODO
-    }
-}
-
-pub fn draw(self: *Self, ctx: jok.Context) !void {
-    _ = ctx;
-
-    const sprite = if (self.state == .left or self.state == .right or self.state == .up or self.state == .down) blk: {
-        if (self.moving_target == null) {
-            break :blk self.anim.frames[self.anim.frames.len - 1];
-        } else {
-            break :blk self.anim.getCurrentFrame();
-        }
-    } else self.anim.getCurrentFrame();
-    switch (self.state) {
-        .death => {
-            if (self.anim.is_over) {
-                self.dead = true;
-            } else if (self.anim.play_index == self.anim.frames.len - 1) {
-                self.anim.frame_interval = 1.0 / 2.0;
-            }
-        },
-        .fade_in => {
-            if (self.anim.is_over) {
-                self.updateState(.down);
-            }
-        },
-        .fade_out => {
-            if (self.anim.is_over) {
-                self.faded_out = true;
-            }
-        },
-        else => {},
-    }
-    try j2d.sprite(sprite, .{ .pos = self.current_pos, .depth = 0.2 });
 }
 
 const State = enum {

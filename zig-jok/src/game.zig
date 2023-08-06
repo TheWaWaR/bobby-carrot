@@ -174,7 +174,7 @@ fn initLevel(ctx: jok.Context) !void {
     } else blk: {
         break :blk try std.fmt.bufPrint(&buf, "assets/level/egg{d:0>2}.blm", .{currentLevel - 30 + 1});
     };
-    std.log.info("filename: {s}", .{filename});
+    std.log.info("level file name: {s}", .{filename});
 
     if (map_info) |info| {
         ctx.allocator().free(info.data_origin);
@@ -208,37 +208,35 @@ fn initLevel(ctx: jok.Context) !void {
 }
 
 pub fn event(ctx: jok.Context, e: sdl.Event) !void {
-    if (bobby.dead) {
-        try initLevel(ctx);
-    } else if (bobby.faded_out) {
-        currentLevel = (currentLevel + 1) % 50;
-        try initLevel(ctx);
-    } else {
-        switch (e) {
-            .key_up => |key| {
-                switch (key.scancode) {
-                    .q => ctx.kill(),
-                    .n => {
-                        currentLevel = (currentLevel + 1) % 50;
-                        try initLevel(ctx);
-                    },
-                    .p => {
-                        currentLevel = (currentLevel + 49) % 50;
-                        try initLevel(ctx);
-                    },
-                    .r => try initLevel(ctx),
-                    else => {},
-                }
-            },
-            else => {},
-        }
+    switch (e) {
+        .key_up => |key| {
+            switch (key.scancode) {
+                .q => ctx.kill(),
+                .n => {
+                    currentLevel = (currentLevel + 1) % 50;
+                    try initLevel(ctx);
+                },
+                .p => {
+                    currentLevel = (currentLevel + 49) % 50;
+                    try initLevel(ctx);
+                },
+                .r => try initLevel(ctx),
+                else => {},
+            }
+        },
+        else => {},
     }
     try bobby.event(ctx, e);
 }
 
 pub fn update(ctx: jok.Context) !void {
+    if (bobby.dead) {
+        try initLevel(ctx);
+    } else if (bobby.faded_out) {
+        currentLevel = (currentLevel + 1) % 50;
+        try initLevel(ctx);
+    }
     try bobby.update(ctx);
-    as.update(ctx.deltaSeconds());
 }
 
 pub fn draw(ctx: jok.Context) !void {
@@ -255,12 +253,11 @@ pub fn draw(ctx: jok.Context) !void {
         };
         const pos_x: f32 = @floatFromInt((idx % 16) * 32);
         const pos_y: f32 = @floatFromInt((idx / 16) * 32);
-        if (anim_opt) |anim| {
-            if (try as.isOver(anim)) try as.reset(anim);
-            try j2d.sprite(
-                try as.getCurrentFrame(anim),
-                .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 0.8 },
-            );
+        if (anim_opt) |name| {
+            var anim = as.animations.getPtr(name).?;
+            if (anim.is_over) anim.reset();
+            try j2d.sprite(anim.getCurrentFrame(), .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 0.8 });
+            anim.update(ctx.deltaSeconds());
         } else {
             const offset_x: f32 = @floatFromInt((byte % 8) * 32);
             const offset_y: f32 = @floatFromInt((byte / 8) * 32);
