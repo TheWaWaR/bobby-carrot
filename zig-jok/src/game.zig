@@ -203,7 +203,7 @@ fn initLevel(ctx: jok.Context) !void {
         .carrot_total = carrot_total,
         .egg_total = egg_total,
     };
-    std.log.info("map_info: {any}", .{map_info});
+    // std.log.info("map_info: {any}", .{map_info});
 
     bobby = Bobby.new(ctx.seconds(), map_info.?, as);
 }
