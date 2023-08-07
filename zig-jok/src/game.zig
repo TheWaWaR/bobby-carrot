@@ -7,6 +7,7 @@ const zaudio = jok.zaudio;
 const Bobby = @import("Bobby.zig");
 const Animation = j2d.AnimationSystem.Animation;
 
+// Constants
 const width_points: u32 = 16;
 const height_points: u32 = 16;
 const view_width_points: u32 = 10;
@@ -17,6 +18,7 @@ const view_width: u32 = 32 * view_width_points;
 const view_height: u32 = 32 * view_height_points;
 const scale: f32 = if (builtin.os.tag == .linux) 2.0 else 1.0;
 
+// Game assets
 var sheet: *j2d.SpriteSheet = undefined;
 var as: *j2d.AnimationSystem = undefined;
 var tileset: j2d.Sprite = undefined;
@@ -24,7 +26,7 @@ var tile_hud: j2d.Sprite = undefined;
 var tile_numbers: j2d.Sprite = undefined;
 var audio_engine: *zaudio.Engine = undefined;
 var sfx_end: *zaudio.Sound = undefined;
-
+// local variables
 var bobby: Bobby = undefined;
 var map_info: ?MapInfo = null;
 var currentLevel: usize = 0;
