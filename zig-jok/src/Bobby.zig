@@ -53,7 +53,7 @@ pub fn event(self: *Self, ctx: jok.Context, e: sdl.Event) !void {
     _ = e;
 }
 
-pub fn update(self: *Self, ctx: jok.Context) !void {
+pub fn update(self: *Self, ctx: jok.Context) !bool {
     if (self.moving_target == null) {
         const state_opt: ?State = if (ctx.isKeyPressed(.left) or ctx.isKeyPressed(.a)) .left // left
         else if (ctx.isKeyPressed(.right) or ctx.isKeyPressed(.d)) .right // right
@@ -78,9 +78,7 @@ pub fn update(self: *Self, ctx: jok.Context) !void {
     self.handleMoving(ctx);
 
     // change camera position
-    if ((old_pos.x != self.current_pos.x or old_pos.y != self.current_pos.y) and self.state != .death) {
-        // TODO
-    }
+    return (old_pos.x != self.current_pos.x or old_pos.y != self.current_pos.y) and self.state != .death;
 }
 
 pub fn draw(self: *Self, ctx: jok.Context) !void {
