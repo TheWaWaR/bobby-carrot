@@ -30,18 +30,6 @@ var x_offset: f32 = 0;
 var x_right_offset: f32 = 0;
 var y_offset: f32 = 0;
 
-pub const MapInfo = struct {
-    data_origin: []const u8,
-    start_idx: usize,
-    end_idx: usize,
-    carrot_total: usize,
-    egg_total: usize,
-
-    pub fn data(info: *const MapInfo) []const u8 {
-        return info.data_origin[4..];
-    }
-};
-
 // ==== Game Engine variables and functions
 pub const jok_window_title: [:0]const u8 = "Bobby Carrot";
 pub const jok_exit_on_recv_esc = false;
@@ -419,3 +407,15 @@ pub fn quit(ctx: jok.Context) void {
     as.destroy();
     sheet.destroy();
 }
+
+pub const MapInfo = struct {
+    data_origin: []const u8,
+    start_idx: usize,
+    end_idx: usize,
+    carrot_total: usize,
+    egg_total: usize,
+
+    pub fn data(info: *const MapInfo) []const u8 {
+        return info.data_origin[4..];
+    }
+};
