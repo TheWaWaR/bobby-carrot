@@ -25,6 +25,7 @@ var tile_numbers: j2d.Sprite = undefined;
 var bobby: Bobby = undefined;
 var map_info: ?MapInfo = null;
 var currentLevel: usize = 0;
+var full_view = true;
 var x_offset: f32 = 0;
 var x_right_offset: f32 = 0;
 var y_offset: f32 = 0;
@@ -46,8 +47,8 @@ pub const jok_window_title: [:0]const u8 = "Bobby Carrot";
 pub const jok_exit_on_recv_esc = false;
 pub const jok_window_size = jok.config.WindowSize{
     .custom = .{
-        .width = @intFromFloat(@as(f32, view_width) * scale),
-        .height = @intFromFloat(@as(f32, view_height) * scale),
+        .width = @intFromFloat(@as(f32, width) * scale),
+        .height = @intFromFloat(@as(f32, height) * scale),
     },
 };
 
@@ -171,34 +172,40 @@ pub fn init(ctx: jok.Context) !void {
 }
 
 fn updateCamera(ctx: jok.Context) !void {
-    var x: c_int = @intFromFloat(bobby.current_pos.x);
-    var y: c_int = @intFromFloat(bobby.current_pos.y);
-    const x_max = @as(c_int, width - view_width);
-    const y_max = @as(c_int, height - view_height);
-    x -= @as(c_int, view_width / 2);
-    y -= @as(c_int, view_height / 2);
-    if (x < 0) {
-        x = 0;
-    }
-    if (x > x_max) {
-        x = x_max;
-    }
-    if (y < 0) {
-        y = 0;
-    }
-    if (y > y_max) {
-        y = y_max;
-    }
-    try ctx.renderer().setViewport(.{
-        .x = -x,
-        .y = -y,
-        .width = @as(c_int, view_width) + x,
-        .height = @as(c_int, view_height) + y,
-    });
+    if (full_view) {
+        x_offset = 0;
+        x_right_offset = 0;
+        y_offset = 0;
+    } else {
+        var x: c_int = @intFromFloat(bobby.current_pos.x);
+        var y: c_int = @intFromFloat(bobby.current_pos.y);
+        const x_max = @as(c_int, width - view_width);
+        const y_max = @as(c_int, height - view_height);
+        x -= @as(c_int, view_width / 2);
+        y -= @as(c_int, view_height / 2);
+        if (x < 0) {
+            x = 0;
+        }
+        if (x > x_max) {
+            x = x_max;
+        }
+        if (y < 0) {
+            y = 0;
+        }
+        if (y > y_max) {
+            y = y_max;
+        }
+        try ctx.renderer().setViewport(.{
+            .x = -x,
+            .y = -y,
+            .width = @as(c_int, view_width) + x,
+            .height = @as(c_int, view_height) + y,
+        });
 
-    x_offset = @floatFromInt(x);
-    x_right_offset = @floatFromInt(x_max - x);
-    y_offset = @floatFromInt(y);
+        x_offset = @floatFromInt(x);
+        x_right_offset = @floatFromInt(x_max - x);
+        y_offset = @floatFromInt(y);
+    }
 }
 
 fn initLevel(ctx: jok.Context) !void {
@@ -254,6 +261,23 @@ pub fn event(ctx: jok.Context, e: sdl.Event) !void {
                 .p => {
                     currentLevel = (currentLevel + 49) % 50;
                     try initLevel(ctx);
+                },
+                .f => {
+                    full_view = !full_view;
+                    if (full_view) {
+                        sdl.c.SDL_SetWindowSize(
+                            ctx.window().ptr,
+                            @intFromFloat(@as(f32, width) * scale),
+                            @intFromFloat(@as(f32, height) * scale),
+                        );
+                    } else {
+                        sdl.c.SDL_SetWindowSize(
+                            ctx.window().ptr,
+                            @intFromFloat(@as(f32, view_width) * scale),
+                            @intFromFloat(@as(f32, view_height) * scale),
+                        );
+                    }
+                    try updateCamera(ctx);
                 },
                 .r => try initLevel(ctx),
                 else => {},
@@ -330,7 +354,10 @@ pub fn draw(ctx: jok.Context) !void {
         .x = @as(f32, @floatFromInt(icon_x)) - x_right_offset,
         .y = 4 + y_offset,
     } });
-    inline for (.{ count / 10, count % 10 }, 0..) |n, idx| {
+    inline for (.{
+        count / 10,
+        count % 10,
+    }, 0..) |n, idx| {
         try j2d.sprite(
             tile_numbers.getSubSprite(@floatFromInt(n * 12), 0, 12, 18),
             .{ .pos = .{
@@ -341,7 +368,11 @@ pub fn draw(ctx: jok.Context) !void {
     }
     // draw keys
     var key_count: u32 = 0;
-    inline for (.{ bobby.key_gray, bobby.key_yellow, bobby.key_red }, 0..) |key, idx| {
+    inline for (.{
+        bobby.key_gray,
+        bobby.key_yellow,
+        bobby.key_red,
+    }, 0..) |key, idx| {
         if (key > 0) {
             try j2d.sprite(
                 tile_hud.getSubSprite(@floatFromInt(122 + idx * 22), 0, 22, 44),
@@ -361,7 +392,13 @@ pub fn draw(ctx: jok.Context) !void {
         m = 99;
         s = 99;
     }
-    inline for (.{ m / 10, m % 10, 10, s / 10, s % 10 }, 0..) |tile_idx, idx| {
+    inline for (.{
+        m / 10,
+        m % 10,
+        10,
+        s / 10,
+        s % 10,
+    }, 0..) |tile_idx, idx| {
         try j2d.sprite(
             tile_numbers.getSubSprite(@floatFromInt(tile_idx * 12), 0, 12, 18),
             .{ .pos = .{
