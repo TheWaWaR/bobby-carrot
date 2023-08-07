@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const jok = @import("jok");
 const sdl = jok.sdl;
 const j2d = jok.j2d;
@@ -13,7 +14,7 @@ const width: u32 = 32 * width_points;
 const height: u32 = 32 * height_points;
 const view_width: u32 = 32 * view_width_points;
 const view_height: u32 = 32 * view_height_points;
-const scale: f32 = 2.0;
+const scale: f32 = if (builtin.os.tag == .linux) 2.0 else 1.0;
 
 var sheet: *j2d.SpriteSheet = undefined;
 var as: *j2d.AnimationSystem = undefined;
@@ -52,16 +53,7 @@ pub fn init(ctx: jok.Context) !void {
     try ctx.renderer().setScale(scale, scale);
 
     // Setup animations
-    const size = ctx.getFramebufferSize();
-    sheet = try j2d.SpriteSheet.fromPicturesInDir(
-        ctx,
-        "assets/image",
-        @intFromFloat(size.x),
-        @intFromFloat(size.y),
-        1,
-        true,
-        .{},
-    );
+    sheet = try j2d.SpriteSheet.fromPicturesInDir(ctx, "assets/image", 800, 800, 1, true, .{});
     tileset = sheet.getSpriteByName("tileset").?;
     tile_hud = sheet.getSpriteByName("hud").?;
     tile_numbers = sheet.getSpriteByName("numbers").?;
