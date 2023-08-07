@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const jok = @import("jok");
 const sdl = jok.sdl;
 const j2d = jok.j2d;
+const zaudio = jok.zaudio;
 const Bobby = @import("Bobby.zig");
 const Animation = j2d.AnimationSystem.Animation;
 
@@ -21,6 +22,8 @@ var as: *j2d.AnimationSystem = undefined;
 var tileset: j2d.Sprite = undefined;
 var tile_hud: j2d.Sprite = undefined;
 var tile_numbers: j2d.Sprite = undefined;
+var audio_engine: *zaudio.Engine = undefined;
+var sfx_end: *zaudio.Sound = undefined;
 
 var bobby: Bobby = undefined;
 var map_info: ?MapInfo = null;
@@ -45,6 +48,10 @@ pub fn init(ctx: jok.Context) !void {
 
     const ratio = ctx.getPixelRatio();
     try ctx.renderer().setScale(scale * ratio, scale * ratio);
+
+    audio_engine = try zaudio.Engine.create(null);
+    sfx_end = try audio_engine.createSoundFromFile("assets/audio/cleared.mp3", .{});
+    sfx_end.setLooping(false);
 
     // Setup animations
     sheet = try j2d.SpriteSheet.fromPicturesInDir(ctx, "assets/image", 800, 800, 1, true, .{});
@@ -233,7 +240,7 @@ fn initLevel(ctx: jok.Context) !void {
     };
     // std.log.info("map_info: {any}", .{map_info});
 
-    bobby = Bobby.new(ctx.seconds(), map_info.?, as);
+    bobby = Bobby.new(ctx.seconds(), map_info.?, as, sfx_end);
     try updateCamera(ctx);
 }
 
@@ -404,6 +411,8 @@ pub fn draw(ctx: jok.Context) !void {
 pub fn quit(ctx: jok.Context) void {
     std.log.info("game quit", .{});
     ctx.allocator().free(map_info.?.data_origin);
+    sfx_end.destroy();
+    audio_engine.destroy();
     as.destroy();
     sheet.destroy();
 }

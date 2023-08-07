@@ -2,6 +2,7 @@ const std = @import("std");
 const jok = @import("jok");
 const sdl = jok.sdl;
 const j2d = jok.j2d;
+const zaudio = jok.zaudio;
 const mem = std.mem;
 const Animation = j2d.AnimationSystem.Animation;
 const MapInfo = @import("game.zig").MapInfo;
@@ -20,6 +21,7 @@ carrot_total: usize,
 egg_total: usize,
 as: *j2d.AnimationSystem,
 anim: *Animation,
+sfx_end: *zaudio.Sound,
 
 carrot_count: usize = 0,
 egg_count: usize = 0,
@@ -29,7 +31,12 @@ key_red: usize = 0,
 faded_out: bool = false,
 dead: bool = false,
 
-pub fn new(start_time: f32, map_info: MapInfo, as: *j2d.AnimationSystem) Self {
+pub fn new(
+    start_time: f32,
+    map_info: MapInfo,
+    as: *j2d.AnimationSystem,
+    sfx_end: *zaudio.Sound,
+) Self {
     const current_coord = .{ .x = map_info.start_idx % 16, .y = map_info.start_idx / 16 };
     const pos_x: f32 = @floatFromInt(current_coord.x * 32 + 16 - 18);
     const pos_y: f32 = @floatFromInt(current_coord.y * 32 + 16 - (50 - 16));
@@ -43,6 +50,7 @@ pub fn new(start_time: f32, map_info: MapInfo, as: *j2d.AnimationSystem) Self {
         .carrot_total = map_info.carrot_total,
         .egg_total = map_info.egg_total,
         .as = as,
+        .sfx_end = sfx_end,
         .anim = as.animations.getPtr("fade_in").?,
     };
 }
@@ -75,7 +83,7 @@ pub fn update(self: *Self, ctx: jok.Context) !bool {
 
     const old_pos = self.current_pos;
     self.updateMovingTarget(ctx);
-    self.handleMoving(ctx);
+    try self.handleMoving(ctx);
 
     // change camera position
     return (old_pos.x != self.current_pos.x or old_pos.y != self.current_pos.y) and self.state != .death;
@@ -220,7 +228,7 @@ fn updateMovingTarget(self: *Self, ctx: jok.Context) void {
     }
 }
 
-fn handleMoving(self: *Self, ctx: jok.Context) void {
+fn handleMoving(self: *Self, ctx: jok.Context) !void {
     _ = ctx;
     if (self.moving_target) |moving_target| {
         const cx: f32 = @floatFromInt(self.current_coord.x);
@@ -371,7 +379,7 @@ fn handleMoving(self: *Self, ctx: jok.Context) void {
                         if (self.isFinished()) {
                             self.updateState(.fade_out);
                             self.next_state = null;
-                            // TODO: play audio
+                            try self.sfx_end.start();
                         }
                     },
                     else => {},
