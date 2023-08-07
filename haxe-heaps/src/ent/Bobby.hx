@@ -63,19 +63,14 @@ class Bobby {
 	}
 
 	public function update(dt:Float) {
-		if (state != Death
-			&& state != FadeIn
-			&& state != FadeOut
-			&& next_state != Death
-			&& next_state != FadeOut
-			&& sprite.currentFrame >= sprite.frames.length / 2) {
-			if (Key.isDown(Key.LEFT)) {
+		if (state != Death && state != FadeIn && state != FadeOut && next_state != Death && next_state != FadeOut) {
+			if (Key.isDown(Key.LEFT) || Key.isDown(Key.A)) {
 				next_state = Left;
-			} else if (Key.isDown(Key.RIGHT)) {
+			} else if (Key.isDown(Key.RIGHT) || Key.isDown(Key.D)) {
 				next_state = Right;
-			} else if (Key.isDown(Key.UP)) {
+			} else if (Key.isDown(Key.UP) || Key.isDown(Key.W)) {
 				next_state = Up;
-			} else if (Key.isDown(Key.DOWN)) {
+			} else if (Key.isDown(Key.DOWN) || Key.isDown(Key.S)) {
 				next_state = Down;
 			}
 		}
