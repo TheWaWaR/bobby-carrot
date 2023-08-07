@@ -170,6 +170,12 @@ pub fn init(ctx: jok.Context) !void {
 
 fn updateCamera(ctx: jok.Context) !void {
     if (full_view) {
+        try ctx.renderer().setViewport(.{
+            .x = 0,
+            .y = 0,
+            .width = @as(c_int, width),
+            .height = @as(c_int, height),
+        });
         x_offset = 0;
         x_right_offset = 0;
         y_offset = 0;
@@ -192,13 +198,13 @@ fn updateCamera(ctx: jok.Context) !void {
         if (y > y_max) {
             y = y_max;
         }
+
         try ctx.renderer().setViewport(.{
             .x = -x,
             .y = -y,
             .width = @as(c_int, view_width) + x,
             .height = @as(c_int, view_height) + y,
         });
-
         x_offset = @floatFromInt(x);
         x_right_offset = @floatFromInt(x_max - x);
         y_offset = @floatFromInt(y);
