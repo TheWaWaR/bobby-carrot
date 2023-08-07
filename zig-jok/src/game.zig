@@ -50,7 +50,9 @@ pub const jok_window_size = jok.config.WindowSize{
 
 pub fn init(ctx: jok.Context) !void {
     std.log.info("game init", .{});
-    try ctx.renderer().setScale(scale, scale);
+
+    const ratio = ctx.getPixelRatio();
+    try ctx.renderer().setScale(scale * ratio, scale * ratio);
 
     // Setup animations
     sheet = try j2d.SpriteSheet.fromPicturesInDir(ctx, "assets/image", 800, 800, 1, true, .{});
