@@ -18,6 +18,8 @@ const scale: f32 = 2.0;
 var sheet: *j2d.SpriteSheet = undefined;
 var as: *j2d.AnimationSystem = undefined;
 var tileset: j2d.Sprite = undefined;
+var tile_hud: j2d.Sprite = undefined;
+var tile_numbers: j2d.Sprite = undefined;
 
 var bobby: Bobby = undefined;
 var map_info: ?MapInfo = null;
@@ -61,6 +63,8 @@ pub fn init(ctx: jok.Context) !void {
         .{},
     );
     tileset = sheet.getSpriteByName("tileset").?;
+    tile_hud = sheet.getSpriteByName("hud").?;
+    tile_numbers = sheet.getSpriteByName("numbers").?;
     as = try j2d.AnimationSystem.create(ctx.allocator());
     const bobby_idle = sheet.getSpriteByName("bobby_idle").?;
     const bobby_fade = sheet.getSpriteByName("bobby_fade").?;
@@ -245,6 +249,7 @@ pub fn draw(ctx: jok.Context) !void {
     // your 2d drawing
     try j2d.begin(.{ .depth_sort = .back_to_forth });
 
+    // Draw Map
     var anim_list: [5]?*Animation = .{ null, null, null, null, null };
     for (map_info.?.data(), 0..) |byte, idx| {
         var anim_opt: ?[:0]const u8 = switch (byte) {
@@ -274,6 +279,58 @@ pub fn draw(ctx: jok.Context) !void {
         if (anim_opt) |anim| {
             anim.update(ctx.deltaSeconds());
         }
+    }
+
+    // Draw indicators
+    var icon_sprite: j2d.Sprite = undefined;
+    var icon_width: u32 = undefined;
+    var count: usize = undefined;
+    if (bobby.carrot_total > 0) {
+        count = bobby.carrot_total - bobby.carrot_count;
+        icon_sprite = tile_hud.getSubSprite(0, 0, 46, 44);
+        icon_width = 46;
+    } else {
+        count = bobby.egg_total - bobby.egg_count;
+        icon_sprite = tile_hud.getSubSprite(46, 0, 34, 44);
+        icon_width = 34;
+    }
+    const icon_x = width - icon_width - 4;
+    try j2d.sprite(icon_sprite, .{ .pos = .{ .x = @floatFromInt(icon_x), .y = 4 } });
+    try j2d.sprite(
+        tile_numbers.getSubSprite(@floatFromInt((count / 10) * 12), 0, 12, 18),
+        .{ .pos = .{ .x = @floatFromInt(icon_x - 2 - 12 * 2 - 1), .y = 4 + 14 } },
+    );
+    try j2d.sprite(
+        tile_numbers.getSubSprite(@floatFromInt((count % 10) * 12), 0, 12, 18),
+        .{ .pos = .{ .x = @floatFromInt(icon_x - 2 - 12 - 1), .y = 4 + 14 } },
+    );
+    // draw keys
+    var key_count: u32 = 0;
+    inline for (.{ bobby.key_gray, bobby.key_yellow, bobby.key_red }, 0..) |key, idx| {
+        if (key > 0) {
+            try j2d.sprite(
+                tile_hud.getSubSprite(@floatFromInt(122 + idx * 22), 0, 22, 44),
+                .{ .pos = .{
+                    .x = @floatFromInt(width - 22 - 4 - key_count * 22),
+                    .y = 4 + 44 + 2,
+                } },
+            );
+            key_count += 1;
+        }
+    }
+    // draw time
+    const seconds: u32 = @intFromFloat(ctx.seconds() - bobby.start_time);
+    var m = seconds / 60;
+    var s = seconds % 60;
+    if (m > 99) {
+        m = 99;
+        s = 99;
+    }
+    inline for (.{ m / 10, m % 10, 10, s / 10, s % 10 }, 0..) |tile_idx, idx| {
+        try j2d.sprite(
+            tile_numbers.getSubSprite(@floatFromInt(tile_idx * 12), 0, 12, 18),
+            .{ .pos = .{ .x = @floatFromInt(4 + 12 * idx), .y = 4 } },
+        );
     }
 
     try bobby.draw(ctx);
