@@ -130,13 +130,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         let keyboard = event_pump.keyboard_state();
-        let state_opt = if keyboard.is_scancode_pressed(Scancode::Left) {
+        let is_pressed = |code| keyboard.is_scancode_pressed(code);
+        let state_opt = if is_pressed(Scancode::Left) || is_pressed(Scancode::A) {
             Some(State::Left)
-        } else if keyboard.is_scancode_pressed(Scancode::Right) {
+        } else if is_pressed(Scancode::Right) || is_pressed(Scancode::D) {
             Some(State::Right)
-        } else if keyboard.is_scancode_pressed(Scancode::Up) {
+        } else if is_pressed(Scancode::Up) || is_pressed(Scancode::W) {
             Some(State::Up)
-        } else if keyboard.is_scancode_pressed(Scancode::Down) {
+        } else if is_pressed(Scancode::Down) || is_pressed(Scancode::S) {
             Some(State::Down)
         } else {
             None
