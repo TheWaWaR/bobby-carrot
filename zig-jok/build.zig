@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
         "src/game.zig",
         target,
         optimize,
-        .{ .use_zaudio = true },
+        .{},
     );
 
     // This declares intent for the executable to be installed into the

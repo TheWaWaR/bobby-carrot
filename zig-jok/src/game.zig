@@ -48,7 +48,7 @@ pub const jok_window_size = jok.config.WindowSize{
 pub fn init(ctx: jok.Context) !void {
     std.log.info("game init", .{});
 
-    const ratio = ctx.getPixelRatio();
+    const ratio = ctx.getAspectRatio();
     try ctx.renderer().setScale(scale * ratio, scale * ratio);
 
     audio_engine = try zaudio.Engine.create(null);
@@ -310,7 +310,7 @@ pub fn draw(ctx: jok.Context) !void {
     // Draw Map
     var anim_list: [5]?*Animation = .{ null, null, null, null, null };
     for (map_info.?.data(), 0..) |byte, idx| {
-        var anim_opt: ?[:0]const u8 = switch (byte) {
+        const anim_opt: ?[:0]const u8 = switch (byte) {
             40 => "tile_conveyor_left",
             41 => "tile_conveyor_right",
             42 => "tile_conveyor_up",
