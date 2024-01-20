@@ -30,7 +30,7 @@ var sfx_end: *zaudio.Sound = undefined;
 var bobby: Bobby = undefined;
 var map_info: ?MapInfo = null;
 var currentLevel: usize = 0;
-var full_view = true;
+var full_view = false;
 var x_offset: f32 = 0;
 var x_right_offset: f32 = 0;
 var y_offset: f32 = 0;
@@ -165,6 +165,7 @@ pub fn init(ctx: jok.Context) !void {
         );
     }
 
+    updateWindowSize(ctx);
     try initLevel(ctx);
 }
 
@@ -252,6 +253,15 @@ fn initLevel(ctx: jok.Context) !void {
     try updateCamera(ctx);
 }
 
+fn updateWindowSize(ctx: jok.Context) void {
+    const size = if (full_view) .{ width, height } else .{ view_width, view_height };
+    sdl.c.SDL_SetWindowSize(
+        ctx.window().ptr,
+        @intFromFloat(@as(f32, size[0]) * scale),
+        @intFromFloat(@as(f32, size[1]) * scale),
+    );
+}
+
 pub fn event(ctx: jok.Context, e: sdl.Event) !void {
     switch (e) {
         .key_up => |key| {
@@ -267,19 +277,7 @@ pub fn event(ctx: jok.Context, e: sdl.Event) !void {
                 },
                 .f => {
                     full_view = !full_view;
-                    if (full_view) {
-                        sdl.c.SDL_SetWindowSize(
-                            ctx.window().ptr,
-                            @intFromFloat(@as(f32, width) * scale),
-                            @intFromFloat(@as(f32, height) * scale),
-                        );
-                    } else {
-                        sdl.c.SDL_SetWindowSize(
-                            ctx.window().ptr,
-                            @intFromFloat(@as(f32, view_width) * scale),
-                            @intFromFloat(@as(f32, view_height) * scale),
-                        );
-                    }
+                    updateWindowSize(ctx);
                     try updateCamera(ctx);
                 },
                 .r => try initLevel(ctx),
