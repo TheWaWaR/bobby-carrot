@@ -37,7 +37,10 @@ pub fn new(
     as: *j2d.AnimationSystem,
     sfx_end: *zaudio.Sound,
 ) Self {
-    const current_coord = .{ .x = map_info.start_idx % 16, .y = map_info.start_idx / 16 };
+    const current_coord = .{
+        .x = map_info.start_idx % 16,
+        .y = map_info.start_idx / 16,
+    };
     const pos_x: f32 = @floatFromInt(current_coord.x * 32 + 16 - 18);
     const pos_y: f32 = @floatFromInt(current_coord.y * 32 + 16 - (50 - 16));
     return .{

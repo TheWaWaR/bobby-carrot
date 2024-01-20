@@ -254,35 +254,34 @@ fn initLevel(ctx: jok.Context) !void {
 }
 
 fn updateWindowSize(ctx: jok.Context) void {
-    const size = if (full_view) .{ width, height } else .{ view_width, view_height };
+    const w = @as(f32, if (full_view) width else view_width);
+    const h = @as(f32, if (full_view) height else view_height);
     sdl.c.SDL_SetWindowSize(
         ctx.window().ptr,
-        @intFromFloat(@as(f32, size[0]) * scale),
-        @intFromFloat(@as(f32, size[1]) * scale),
+        @intFromFloat(w * scale),
+        @intFromFloat(h * scale),
     );
 }
 
 pub fn event(ctx: jok.Context, e: sdl.Event) !void {
     switch (e) {
-        .key_up => |key| {
-            switch (key.scancode) {
-                .q => ctx.kill(),
-                .n => {
-                    currentLevel = (currentLevel + 1) % 50;
-                    try initLevel(ctx);
-                },
-                .p => {
-                    currentLevel = (currentLevel + 49) % 50;
-                    try initLevel(ctx);
-                },
-                .f => {
-                    full_view = !full_view;
-                    updateWindowSize(ctx);
-                    try updateCamera(ctx);
-                },
-                .r => try initLevel(ctx),
-                else => {},
-            }
+        .key_up => |key| switch (key.scancode) {
+            .q => ctx.kill(),
+            .n => {
+                currentLevel = (currentLevel + 1) % 50;
+                try initLevel(ctx);
+            },
+            .p => {
+                currentLevel = (currentLevel + 49) % 50;
+                try initLevel(ctx);
+            },
+            .f => {
+                full_view = !full_view;
+                updateWindowSize(ctx);
+                try updateCamera(ctx);
+            },
+            .r => try initLevel(ctx),
+            else => {},
         },
         else => {},
     }
@@ -320,7 +319,10 @@ pub fn draw(ctx: jok.Context) !void {
         const pos_y: f32 = @floatFromInt((idx / 16) * 32);
         if (anim_opt) |name| {
             var anim = as.animations.getPtr(name).?;
-            try j2d.sprite(anim.getCurrentFrame(), .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 0.8 });
+            try j2d.sprite(
+                anim.getCurrentFrame(),
+                .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 0.8 },
+            );
             anim_list[@as(usize, byte) - 40] = anim;
         } else {
             const offset_x: f32 = @floatFromInt((byte % 8) * 32);
