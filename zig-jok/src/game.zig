@@ -200,6 +200,14 @@ fn updateCamera(ctx: jok.Context) !void {
 
 fn initLevel(ctx: jok.Context) !void {
     var buf: [64]u8 = undefined;
+
+    const title = if (currentLevel < 30) blk: {
+        break :blk try std.fmt.bufPrintZ(&buf, "Bobby Carrot (Normal {})", .{currentLevel + 1});
+    } else blk: {
+        break :blk try std.fmt.bufPrintZ(&buf, "Bobby Carrot (Egg {})", .{currentLevel - 30 + 1});
+    };
+    sdl.c.SDL_SetWindowTitle(ctx.window().ptr, title);
+
     const filename = if (currentLevel < 30) blk: {
         break :blk try std.fmt.bufPrint(&buf, "assets/level/normal{d:0>2}.blm", .{currentLevel + 1});
     } else blk: {
