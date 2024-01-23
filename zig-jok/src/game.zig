@@ -128,21 +128,12 @@ pub fn init(ctx: jok.Context) !void {
         "bobby_down",
     }) |name| {
         const sprite = sheet.getSpriteByName(name).?;
-        try as.add(
-            name,
-            &[_]j2d.Sprite{
-                sprite.getSubSprite(0 * 36, 0, 36, 50),
-                sprite.getSubSprite(1 * 36, 0, 36, 50),
-                sprite.getSubSprite(2 * 36, 0, 36, 50),
-                sprite.getSubSprite(3 * 36, 0, 36, 50),
-                sprite.getSubSprite(4 * 36, 0, 36, 50),
-                sprite.getSubSprite(5 * 36, 0, 36, 50),
-                sprite.getSubSprite(6 * 36, 0, 36, 50),
-                sprite.getSubSprite(7 * 36, 0, 36, 50),
-            },
-            30.0,
-            true,
-        );
+        var sprites: [8]j2d.Sprite = undefined;
+        for (0..sprites.len) |i| {
+            const x: f32 = @floatFromInt(i);
+            sprites[i] = sprite.getSubSprite(x * 36, 0, 36, 50);
+        }
+        try as.add(name, &sprites, 30.0, true);
     }
     inline for (.{
         "tile_finish",
@@ -152,17 +143,12 @@ pub fn init(ctx: jok.Context) !void {
         "tile_conveyor_down",
     }) |name| {
         const sprite = sheet.getSpriteByName(name).?;
-        try as.add(
-            name,
-            &[_]j2d.Sprite{
-                sprite.getSubSprite(0 * 32, 0, 32, 32),
-                sprite.getSubSprite(1 * 32, 0, 32, 32),
-                sprite.getSubSprite(2 * 32, 0, 32, 32),
-                sprite.getSubSprite(3 * 32, 0, 32, 32),
-            },
-            16.0,
-            true,
-        );
+        var sprites: [4]j2d.Sprite = undefined;
+        for (0..sprites.len) |i| {
+            const x: f32 = @floatFromInt(i);
+            sprites[i] = sprite.getSubSprite(x * 32, 0, 32, 32);
+        }
+        try as.add(name, &sprites, 16.0, true);
     }
 
     updateWindowSize(ctx);
