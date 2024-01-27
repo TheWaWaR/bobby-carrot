@@ -5,7 +5,7 @@ const j2d = jok.j2d;
 const zaudio = jok.zaudio;
 const mem = std.mem;
 const Animation = j2d.AnimationSystem.Animation;
-const V1MapInfo = @import("version.zig").V1MapInfo;
+const MapInfo = @import("./Map.zig").MapInfo;
 
 const Self = @This();
 
@@ -33,7 +33,7 @@ dead: bool = false,
 
 pub fn new(
     start_time: f32,
-    map_info: V1MapInfo,
+    map_info: MapInfo,
     as: *j2d.AnimationSystem,
     sfx_end: *zaudio.Sound,
 ) Self {
