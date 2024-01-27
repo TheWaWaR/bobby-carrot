@@ -5,6 +5,7 @@ const sdl = jok.sdl;
 const j2d = jok.j2d;
 const zaudio = jok.zaudio;
 const Bobby = @import("Bobby.zig");
+const V1MapInfo = @import("version.zig").V1MapInfo;
 const Animation = j2d.AnimationSystem.Animation;
 
 // Constants
@@ -28,7 +29,7 @@ var audio_engine: *zaudio.Engine = undefined;
 var sfx_end: *zaudio.Sound = undefined;
 // local variables
 var bobby: Bobby = undefined;
-var map_info: ?MapInfo = null;
+var map_info: V1MapInfo = undefined;
 var currentLevel: usize = 0;
 var full_view = false;
 var x_offset: f32 = 0;
@@ -52,11 +53,11 @@ pub fn init(ctx: jok.Context) !void {
     try ctx.renderer().setScale(scale * ratio, scale * ratio);
 
     audio_engine = try zaudio.Engine.create(null);
-    sfx_end = try audio_engine.createSoundFromFile("assets/audio/cleared.mp3", .{});
+    sfx_end = try audio_engine.createSoundFromFile("assets/v1/audio/cleared.mp3", .{});
     sfx_end.setLooping(false);
 
     // Setup animations
-    sheet = try j2d.SpriteSheet.fromPicturesInDir(ctx, "assets/image", 800, 800, 1, true, .{});
+    sheet = try j2d.SpriteSheet.fromPicturesInDir(ctx, "assets/v1/image", 800, 800, 1, true, .{});
     tileset = sheet.getSpriteByName("tileset").?;
     tile_hud = sheet.getSpriteByName("hud").?;
     tile_numbers = sheet.getSpriteByName("numbers").?;
@@ -151,6 +152,7 @@ pub fn init(ctx: jok.Context) !void {
         try as.add(name, &sprites, 16.0, true);
     }
 
+    map_info = V1MapInfo.new();
     updateWindowSize(ctx);
     try initLevel(ctx);
 }
@@ -199,51 +201,8 @@ fn updateCamera(ctx: jok.Context) !void {
 }
 
 fn initLevel(ctx: jok.Context) !void {
-    var buf: [64]u8 = undefined;
-
-    const title = if (currentLevel < 30) blk: {
-        break :blk try std.fmt.bufPrintZ(&buf, "Bobby Carrot (Normal {})", .{currentLevel + 1});
-    } else blk: {
-        break :blk try std.fmt.bufPrintZ(&buf, "Bobby Carrot (Egg {})", .{currentLevel - 30 + 1});
-    };
-    sdl.c.SDL_SetWindowTitle(ctx.window().ptr, title);
-
-    const filename = if (currentLevel < 30) blk: {
-        break :blk try std.fmt.bufPrint(&buf, "assets/level/normal{d:0>2}.blm", .{currentLevel + 1});
-    } else blk: {
-        break :blk try std.fmt.bufPrint(&buf, "assets/level/egg{d:0>2}.blm", .{currentLevel - 30 + 1});
-    };
-    std.log.info("level file name: {s}", .{filename});
-
-    if (map_info) |info| {
-        ctx.allocator().free(info.data_origin);
-    }
-
-    // Load level data
-    const data = try std.fs.cwd().readFileAlloc(ctx.allocator(), filename, 512);
-    var start_idx: usize = 0;
-    var end_idx: usize = 0;
-    var carrot_total: usize = 0;
-    var egg_total: usize = 0;
-    for (data[4..], 0..) |byte, idx| {
-        switch (byte) {
-            19 => carrot_total += 1,
-            21 => start_idx = idx,
-            44 => end_idx = idx,
-            45 => egg_total += 1,
-            else => {},
-        }
-    }
-    map_info = MapInfo{
-        .data_origin = data,
-        .start_idx = start_idx,
-        .end_idx = end_idx,
-        .carrot_total = carrot_total,
-        .egg_total = egg_total,
-    };
-    // std.log.info("map_info: {any}", .{map_info});
-
-    bobby = Bobby.new(ctx.seconds(), map_info.?, as, sfx_end);
+    try map_info.load(ctx, currentLevel);
+    bobby = Bobby.new(ctx.seconds(), map_info, as, sfx_end);
     try updateCamera(ctx);
 }
 
@@ -300,7 +259,7 @@ pub fn draw(ctx: jok.Context) !void {
 
     // Draw Map
     var anim_list: [5]?*Animation = .{ null, null, null, null, null };
-    for (map_info.?.data(), 0..) |byte, idx| {
+    for (map_info.data(), 0..) |byte, idx| {
         const anim_opt: ?[:0]const u8 = switch (byte) {
             40 => "tile_conveyor_left",
             41 => "tile_conveyor_right",
@@ -355,6 +314,10 @@ pub fn draw(ctx: jok.Context) !void {
         count / 10,
         count % 10,
     }, 0..) |n, idx| {
+        std.log.info(
+            "numbers n: {}, carrot_total: {}, carrot_count: {}",
+            .{ n, bobby.carrot_total, bobby.carrot_count },
+        );
         try j2d.sprite(
             tile_numbers.getSubSprite(@floatFromInt(n * 12), 0, 12, 18),
             .{ .pos = .{
@@ -412,21 +375,9 @@ pub fn draw(ctx: jok.Context) !void {
 
 pub fn quit(ctx: jok.Context) void {
     std.log.info("game quit", .{});
-    ctx.allocator().free(map_info.?.data_origin);
+    ctx.allocator().free(map_info.data_origin);
     sfx_end.destroy();
     audio_engine.destroy();
     as.destroy();
     sheet.destroy();
 }
-
-pub const MapInfo = struct {
-    data_origin: []const u8,
-    start_idx: usize,
-    end_idx: usize,
-    carrot_total: usize,
-    egg_total: usize,
-
-    pub fn data(info: *const MapInfo) []const u8 {
-        return info.data_origin[4..];
-    }
-};
