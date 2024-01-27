@@ -5,7 +5,8 @@ const sdl = jok.sdl;
 const j2d = jok.j2d;
 const zaudio = jok.zaudio;
 const Animation = j2d.AnimationSystem.Animation;
-const V1Map = @import("versions/v1/Map.zig");
+const Map = @import("Map.zig");
+const MapV1 = @import("versions/v1/Map.zig");
 
 // Constants
 const scale: f32 = if (builtin.os.tag == .linux) 2.0 else 1.0;
@@ -13,7 +14,7 @@ const scale: f32 = if (builtin.os.tag == .linux) 2.0 else 1.0;
 var sheet: *j2d.SpriteSheet = undefined;
 var as: *j2d.AnimationSystem = undefined;
 var audio_engine: *zaudio.Engine = undefined;
-var map: V1Map = .{};
+var map: Map = undefined;
 
 // local variables
 var full_view = false;
@@ -23,8 +24,8 @@ pub const jok_window_title: [:0]const u8 = "Bobby Carrot";
 pub const jok_exit_on_recv_esc = false;
 pub const jok_window_size = jok.config.WindowSize{
     .custom = .{
-        .width = @intFromFloat(@as(f32, V1Map.width) * scale),
-        .height = @intFromFloat(@as(f32, V1Map.height) * scale),
+        .width = @intFromFloat(@as(f32, MapV1.width) * scale),
+        .height = @intFromFloat(@as(f32, MapV1.height) * scale),
     },
 };
 
@@ -35,6 +36,9 @@ pub fn init(ctx: jok.Context) !void {
     std.log.info("ratio: {}, scale: {}", .{ ratio, scale });
     try ctx.renderer().setScale(scale * ratio, scale * ratio);
 
+    var map_impl = try ctx.allocator().create(MapV1);
+    map_impl.* = .{};
+    map = map_impl.interface();
     try map.init(ctx, &sheet, &as, &audio_engine);
 
     updateWindowSize(ctx);

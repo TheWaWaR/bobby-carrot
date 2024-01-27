@@ -6,6 +6,7 @@ const j2d = jok.j2d;
 const zaudio = jok.zaudio;
 const Bobby = @import("./Bobby.zig");
 const Animation = j2d.AnimationSystem.Animation;
+const Map = @import("../../Map.zig");
 
 // Constants
 const width_points: u32 = 16;
@@ -34,13 +35,86 @@ y_offset: f32 = 0,
 
 const Self = @This();
 
+pub fn interface(impl_self: *Self) Map {
+    const Impl = struct {
+        pub fn init(
+            ptr: *anyopaque,
+            ctx: jok.Context,
+            global_sheet: **j2d.SpriteSheet,
+            global_as: **j2d.AnimationSystem,
+            global_audio_engine: **zaudio.Engine,
+        ) anyerror!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            try self.init(ctx, global_sheet, global_as, global_audio_engine);
+        }
+
+        pub fn deinit(ptr: *anyopaque, ctx: jok.Context) void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            self.deinit(ctx);
+        }
+
+        pub fn windowSize(ptr: *anyopaque, ctx: jok.Context, full_view: bool) [2]u32 {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            return self.windowSize(ctx, full_view);
+        }
+
+        pub fn updateCamera(ptr: *anyopaque, ctx: jok.Context, full_view: bool) anyerror!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            try self.updateCamera(ctx, full_view);
+        }
+
+        pub fn nextLevel(ptr: *anyopaque, ctx: jok.Context, full_view: bool) anyerror!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            try self.nextLevel(ctx, full_view);
+        }
+        pub fn prevLevel(ptr: *anyopaque, ctx: jok.Context, full_view: bool) anyerror!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            try self.prevLevel(ctx, full_view);
+        }
+        pub fn initLevel(ptr: *anyopaque, ctx: jok.Context, full_view: bool) anyerror!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            try self.initLevel(ctx, full_view);
+        }
+
+        pub fn event(ptr: *anyopaque, ctx: jok.Context, e: sdl.Event) anyerror!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            try self.event(ctx, e);
+        }
+
+        pub fn update(ptr: *anyopaque, ctx: jok.Context, full_view: bool) anyerror!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            try self.update(ctx, full_view);
+        }
+
+        pub fn draw(ptr: *anyopaque, ctx: jok.Context) anyerror!void {
+            const self: *Self = @ptrCast(@alignCast(ptr));
+            try self.draw(ctx);
+        }
+    };
+    return .{
+        .ptr = impl_self,
+        .vtable = &.{
+            .init = Impl.init,
+            .deinit = Impl.deinit,
+            .windowSize = Impl.windowSize,
+            .updateCamera = Impl.updateCamera,
+            .nextLevel = Impl.nextLevel,
+            .prevLevel = Impl.prevLevel,
+            .initLevel = Impl.initLevel,
+            .event = Impl.event,
+            .update = Impl.update,
+            .draw = Impl.draw,
+        },
+    };
+}
+
 pub fn init(
     self: *Self,
     ctx: jok.Context,
     global_sheet: **j2d.SpriteSheet,
     global_as: **j2d.AnimationSystem,
     global_audio_engine: **zaudio.Engine,
-) !void {
+) anyerror!void {
     std.log.info("map init", .{});
     var audio_engine = try zaudio.Engine.create(null);
     self.sfx_end = try audio_engine.createSoundFromFile("assets/v1/audio/cleared.mp3", .{});
@@ -151,6 +225,7 @@ pub fn init(
 pub fn deinit(self: *Self, ctx: jok.Context) void {
     ctx.allocator().free(self.info.data_origin);
     self.sfx_end.destroy();
+    ctx.allocator().destroy(self);
 }
 
 pub fn windowSize(_: *Self, _: jok.Context, full_view: bool) [2]u32 {
@@ -160,7 +235,7 @@ pub fn windowSize(_: *Self, _: jok.Context, full_view: bool) [2]u32 {
     return size;
 }
 
-pub fn updateCamera(self: *Self, ctx: jok.Context, full_view: bool) !void {
+pub fn updateCamera(self: *Self, ctx: jok.Context, full_view: bool) anyerror!void {
     if (full_view) {
         try ctx.renderer().setViewport(.{
             .x = 0,
@@ -203,27 +278,27 @@ pub fn updateCamera(self: *Self, ctx: jok.Context, full_view: bool) !void {
     }
 }
 
-pub fn nextLevel(self: *Self, ctx: jok.Context, full_view: bool) !void {
+pub fn nextLevel(self: *Self, ctx: jok.Context, full_view: bool) anyerror!void {
     self.currentLevel = (self.currentLevel + 1) % 50;
     try self.initLevel(ctx, full_view);
 }
 
-pub fn prevLevel(self: *Self, ctx: jok.Context, full_view: bool) !void {
+pub fn prevLevel(self: *Self, ctx: jok.Context, full_view: bool) anyerror!void {
     self.currentLevel = (self.currentLevel + 49) % 50;
     try self.initLevel(ctx, full_view);
 }
 
-pub fn initLevel(self: *Self, ctx: jok.Context, full_view: bool) !void {
+pub fn initLevel(self: *Self, ctx: jok.Context, full_view: bool) anyerror!void {
     try self.info.load(ctx, self.currentLevel);
     self.bobby = Bobby.new(ctx.seconds(), self.info, self.as, self.sfx_end);
     try self.updateCamera(ctx, full_view);
 }
 
-pub fn event(self: *Self, ctx: jok.Context, e: sdl.Event) !void {
+pub fn event(self: *Self, ctx: jok.Context, e: sdl.Event) anyerror!void {
     try self.bobby.event(ctx, e);
 }
 
-pub fn update(self: *Self, ctx: jok.Context, full_view: bool) !void {
+pub fn update(self: *Self, ctx: jok.Context, full_view: bool) anyerror!void {
     if (self.bobby.dead) {
         try self.initLevel(ctx, full_view);
     } else if (self.bobby.faded_out) {
@@ -235,7 +310,7 @@ pub fn update(self: *Self, ctx: jok.Context, full_view: bool) !void {
     }
 }
 
-pub fn draw(self: *Self, ctx: jok.Context) !void {
+pub fn draw(self: *Self, ctx: jok.Context) anyerror!void {
     // Draw Map
     var anim_list: [5]?*Animation = .{ null, null, null, null, null };
     for (self.info.data(), 0..) |byte, idx| {
