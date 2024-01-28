@@ -107,16 +107,16 @@ pub fn update(self: *Self, ctx: jok.Context) !bool {
     if (self.ice_block_coord) |coord| {
         if (self.last_laser_time) |start| {
             const delta = ctx.seconds() - start;
-            if (delta > 2.0) {
+            if (delta > 1.6) {
                 self.map_data[coord.index()] = 63;
                 self.ice_block_coord = null;
                 self.last_laser_time = null;
                 ice_block_coord_changed = true;
-            } else if (delta > 1.5) {
+            } else if (delta > 1.2) {
                 self.map_data[coord.index()] = 62;
-            } else if (delta > 1.0) {
+            } else if (delta > 0.8) {
                 self.map_data[coord.index()] = 61;
-            } else if (delta > 0.5) {
+            } else if (delta > 0.4) {
                 self.map_data[coord.index()] = 60;
             }
         }
