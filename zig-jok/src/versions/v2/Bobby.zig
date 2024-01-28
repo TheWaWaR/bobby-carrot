@@ -31,6 +31,10 @@ key_red: usize = 0,
 faded_out: bool = false,
 dead: bool = false,
 
+// TODO: handle ice ground
+// TODO: action when melt a ice block
+// TODO: move camera smoothly
+
 pub fn new(
     start_time: f32,
     map_info: MapInfo,
@@ -230,23 +234,15 @@ fn updateMovingTarget(self: *Self, ctx: jok.Context, next_state: State) void {
         or (new_item == 25 and (state == .left or state == .down)) // forbid: left + down
         or (new_item == 26 and (state == .left or state == .up)) // forbid: left + up
         or (new_item == 27 and (state == .right or state == .up)) // forbid: right + up
-        or ((new_item == 28 or new_item == 40 or new_item == 41) and (state == .up or state == .down)) // forbid: up + down
-        or ((new_item == 29 or new_item == 42 or new_item == 43) and (state == .left or state == .right)) // forbid: left + right
-        or (new_item == 40 and state == .right) // forbid: right
-        or (new_item == 41 and state == .left) // forbid: left
-        or (new_item == 42 and state == .down) // forbid: down
-        or (new_item == 43 and state == .up) // forbid: up
+        or ((new_item == 28) and (state == .up or state == .down)) // forbid: up + down
+        or ((new_item == 29) and (state == .left or state == .right)) // forbid: left + right
         or (new_item == 59) // ice block
         or (old_item == 24 and (state == .left or state == .up)) // forbid: left + up
         or (old_item == 25 and (state == .right or state == .up)) // forbid: right + up
         or (old_item == 26 and (state == .right or state == .down)) // forbid: right + down
         or (old_item == 27 and (state == .left or state == .down)) // forbid: left + down
-        or ((old_item == 28 or old_item == 40 or old_item == 41) and (state == .up or state == .down)) // forbid: up + down
-        or ((old_item == 29 or old_item == 42 or old_item == 43) and (state == .left or state == .right)) // forbid: left + right
-        or (old_item == 40 and state == .right) // forbid: right
-        or (old_item == 41 and state == .left) // forbid: left
-        or (old_item == 42 and state == .down) // forbid: down
-        or (old_item == 43 and state == .up) // forbid: up
+        or ((old_item == 28) and (state == .up or state == .down)) // forbid: up + down
+        or ((old_item == 29) and (state == .left or state == .right)) // forbid: left + right
         ) {
             self.moving_target = null;
         } else {
