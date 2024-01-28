@@ -13,6 +13,7 @@ state: State,
 next_state: ?State = null,
 start_time: f32,
 last_action_time: f32,
+last_laser_time: ?f32 = null,
 current_pos: sdl.PointF,
 current_coord: Coordinate,
 moving_target: ?Coordinate = null,
@@ -63,7 +64,7 @@ pub fn event(self: *Self, ctx: jok.Context, e: sdl.Event) !void {
 }
 
 pub fn update(self: *Self, ctx: jok.Context) !bool {
-    if (self.moving_target == null) {
+    if (self.moving_target == null and self.ice_block_coord == null) {
         const state_opt: ?State = if (ctx.isKeyPressed(.left) or ctx.isKeyPressed(.a)) .left // left
         else if (ctx.isKeyPressed(.right) or ctx.isKeyPressed(.d)) .right // right
         else if (ctx.isKeyPressed(.up) or ctx.isKeyPressed(.w)) .up // up
@@ -91,8 +92,34 @@ pub fn update(self: *Self, ctx: jok.Context) !bool {
         try self.handleMoving(moving_target);
     }
 
+    var ice_block_coord_changed = !std.meta.eql(old_ice_block_coord, self.ice_block_coord);
+    if (ice_block_coord_changed) {
+        if (self.ice_block_coord == null) {
+            self.last_laser_time = null;
+        } else {
+            self.last_laser_time = ctx.seconds();
+        }
+    }
+    if (self.ice_block_coord) |coord| {
+        if (self.last_laser_time) |start| {
+            const delta = ctx.seconds() - start;
+            if (delta > 2.0) {
+                self.map_data[coord.index()] = 63;
+                self.ice_block_coord = null;
+                self.last_laser_time = null;
+                ice_block_coord_changed = true;
+            } else if (delta > 1.5) {
+                self.map_data[coord.index()] = 62;
+            } else if (delta > 1.0) {
+                self.map_data[coord.index()] = 61;
+            } else if (delta > 0.5) {
+                self.map_data[coord.index()] = 60;
+            }
+        }
+    }
+
     // change camera position
-    return (!std.meta.eql(old_ice_block_coord, self.ice_block_coord) //
+    return (ice_block_coord_changed //
     or !std.meta.eql(old_pos, self.current_pos)) //
     and self.state != .death;
 }
@@ -192,8 +219,8 @@ fn updateMovingTarget(self: *Self, ctx: jok.Context, next_state: State) void {
 
     if (self.moving_target) |moving_target| {
         self.last_action_time = ctx.seconds();
-        const old_item = self.map_data[self.current_coord.index()];
-        const new_item = self.map_data[moving_target.index()];
+        const old_item = self.map_data[self.current_coord.index()] & 0b0011_1111;
+        const new_item = self.map_data[moving_target.index()] & 0b0011_1111;
         const state = self.state;
         if (new_item < 18 // normal block
         or (new_item == 33 and self.key_gray == 0) // lock gray
@@ -282,7 +309,7 @@ fn handleMoving(self: *Self, moving_target: Coordinate) !void {
         if (self.moving_target == null) {
             const old_idx = old_coord.index();
             const new_idx = self.current_coord.index();
-            switch (self.map_data[old_idx]) {
+            switch (self.map_data[old_idx] & 0b0011_1111) {
                 24 => self.map_data[old_idx] = 25,
                 25 => self.map_data[old_idx] = 26,
                 26 => self.map_data[old_idx] = 27,
@@ -317,7 +344,7 @@ fn handleMoving(self: *Self, moving_target: Coordinate) !void {
                 },
                 else => {},
             }
-            switch (self.map_data[new_idx]) {
+            switch (self.map_data[new_idx] & 0b0011_1111) {
                 // get carrot
                 19 => {
                     self.map_data[new_idx] = 20;
@@ -477,6 +504,8 @@ fn fillLight(map: []u8, start: Coordinate, dir: Direction, clear: bool) ?Coordin
                     else => return null,
                 }
             },
+            // // TODO: stop at ruby
+            // 49, 50, 51, 52 => return null,
             // stop at ice block
             59 => return coord,
             else => {},
