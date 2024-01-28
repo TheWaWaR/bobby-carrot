@@ -36,9 +36,9 @@ pub fn init(ctx: jok.Context) !void {
     std.log.info("ratio: {}, scale: {}", .{ ratio, scale });
     try ctx.renderer().setScale(scale * ratio, scale * ratio);
 
-    var map_impl = try ctx.allocator().create(MapV1);
+    const map_impl = try ctx.allocator().create(MapV1);
     map_impl.* = .{};
-    map = map_impl.interface();
+    map = Map.interface(map_impl);
     try map.init(ctx, &sheet, &as, &audio_engine);
 
     updateWindowSize(ctx);
