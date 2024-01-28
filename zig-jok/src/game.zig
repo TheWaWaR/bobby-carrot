@@ -7,6 +7,7 @@ const zaudio = jok.zaudio;
 const Animation = j2d.AnimationSystem.Animation;
 const Map = @import("Map.zig");
 const MapV1 = @import("versions/v1/Map.zig");
+const MapV2 = @import("versions/v2/Map.zig");
 
 // Constants
 const scale: f32 = if (builtin.os.tag == .linux) 2.0 else 1.0;
@@ -24,8 +25,8 @@ pub const jok_window_title: [:0]const u8 = "Bobby Carrot";
 pub const jok_exit_on_recv_esc = false;
 pub const jok_window_size = jok.config.WindowSize{
     .custom = .{
-        .width = @intFromFloat(@as(f32, MapV1.width) * scale),
-        .height = @intFromFloat(@as(f32, MapV1.height) * scale),
+        .width = MapV1.width,
+        .height = MapV1.height,
     },
 };
 
@@ -36,9 +37,26 @@ pub fn init(ctx: jok.Context) !void {
     std.log.info("ratio: {}, scale: {}", .{ ratio, scale });
     try ctx.renderer().setScale(scale * ratio, scale * ratio);
 
-    const map_impl = try ctx.allocator().create(MapV1);
-    map_impl.* = .{};
-    map = Map.interface(map_impl);
+    var args = std.process.args();
+    _ = args.skip();
+    if (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "v1")) {
+            const map_impl = try ctx.allocator().create(MapV1);
+            map_impl.* = .{};
+            map = Map.interface(map_impl);
+        } else if (std.mem.eql(u8, arg, "v2")) {
+            const map_impl = try ctx.allocator().create(MapV2);
+            map_impl.* = .{};
+            map = Map.interface(map_impl);
+        } else {
+            std.log.err("invalid arg: {s}", .{arg});
+            return error.InvalidArg;
+        }
+    } else {
+        const map_impl = try ctx.allocator().create(MapV1);
+        map_impl.* = .{};
+        map = Map.interface(map_impl);
+    }
     try map.init(ctx, &sheet, &as, &audio_engine);
 
     updateWindowSize(ctx);
