@@ -178,6 +178,10 @@ pub fn updateCamera(self: *Self, ctx: jok.Context, full_view: bool) anyerror!voi
     } else {
         var x: c_int = @intFromFloat(self.bobby.current_pos.x);
         var y: c_int = @intFromFloat(self.bobby.current_pos.y);
+        if (self.bobby.ice_block_coord) |coord| {
+            x = @as(c_int, @intCast(coord.x * 32));
+            y = @as(c_int, @intCast(coord.y * 32));
+        }
         const x_max = @as(c_int, width - view_width);
         const y_max = @as(c_int, height - view_height);
         x -= @as(c_int, view_width / 2);
@@ -257,12 +261,31 @@ pub fn draw(self: *Self, ctx: jok.Context) anyerror!void {
             );
             anim_list[@as(usize, byte) - 40] = anim;
         } else {
-            const offset_x: f32 = @floatFromInt((byte % 8) * 32);
-            const offset_y: f32 = @floatFromInt((byte / 8) * 32);
-            try j2d.sprite(
-                self.tileset.getSubSprite(offset_x, offset_y, 32, 32),
-                .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 1.0 },
-            );
+            const raw_item: u8 = byte & 0b0011_1111;
+            {
+                const offset_x: f32 = @floatFromInt((raw_item % 8) * 32);
+                const offset_y: f32 = @floatFromInt((raw_item / 8) * 32);
+                try j2d.sprite(
+                    self.tileset.getSubSprite(offset_x, offset_y, 32, 32),
+                    .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 1.0 },
+                );
+            }
+            const cover: u8 = (byte & 0b1100_0000) >> 6;
+            if (cover > 0) {
+                const laser_item: u8 = switch (raw_item) {
+                    45 => 57,
+                    46 => 58,
+                    47 => 55,
+                    48 => 56,
+                    else => if (cover == 1) 54 else 53,
+                };
+                const offset_x: f32 = @floatFromInt((laser_item % 8) * 32);
+                const offset_y: f32 = @floatFromInt((laser_item / 8) * 32);
+                try j2d.sprite(
+                    self.tileset.getSubSprite(offset_x, offset_y, 32, 32),
+                    .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 1.0 },
+                );
+            }
         }
     }
     for (anim_list) |anim_opt| {
@@ -270,6 +293,8 @@ pub fn draw(self: *Self, ctx: jok.Context) anyerror!void {
             anim.update(ctx.deltaSeconds());
         }
     }
+
+    // Draw laser
 
     // Draw indicators
     var icon_sprite: j2d.Sprite = undefined;

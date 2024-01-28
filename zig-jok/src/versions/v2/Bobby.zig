@@ -16,6 +16,7 @@ last_action_time: f32,
 current_pos: sdl.PointF,
 current_coord: Coordinate,
 moving_target: ?Coordinate = null,
+ice_block_coord: ?Coordinate = null,
 map_data: []u8,
 carrot_total: usize,
 as: *j2d.AnimationSystem,
@@ -81,6 +82,7 @@ pub fn update(self: *Self, ctx: jok.Context) !bool {
         self.updateState(.idle);
     }
 
+    const old_ice_block_coord = self.ice_block_coord;
     const old_pos = self.current_pos;
     if (self.next_state) |next_state| {
         self.updateMovingTarget(ctx, next_state);
@@ -90,7 +92,9 @@ pub fn update(self: *Self, ctx: jok.Context) !bool {
     }
 
     // change camera position
-    return (old_pos.x != self.current_pos.x or old_pos.y != self.current_pos.y) and self.state != .death;
+    return (!std.meta.eql(old_ice_block_coord, self.ice_block_coord) //
+    or !std.meta.eql(old_pos, self.current_pos)) //
+    and self.state != .death;
 }
 
 pub fn draw(self: *Self, ctx: jok.Context) !void {
@@ -205,7 +209,7 @@ fn updateMovingTarget(self: *Self, ctx: jok.Context, next_state: State) void {
         or (new_item == 41 and state == .left) // forbid: left
         or (new_item == 42 and state == .down) // forbid: down
         or (new_item == 43 and state == .up) // forbid: up
-        or (new_item == 46) // egg
+        or (new_item == 59) // ice block
         or (old_item == 24 and (state == .left or state == .up)) // forbid: left + up
         or (old_item == 25 and (state == .right or state == .up)) // forbid: right + up
         or (old_item == 26 and (state == .right or state == .down)) // forbid: right + down
@@ -236,7 +240,7 @@ fn handleMoving(self: *Self, moving_target: Coordinate) !void {
         const x = (tx - cx) / 2.0 + cx;
         const y = (ty - cy) / 2.0 + cy;
         self.current_pos.x = 32.0 * (x + 0.5) - 44.0 / 2.0;
-        self.current_pos.y = 32.0 * (y + 0.5) - (54.0 - 32.0 / 2.0);
+        self.current_pos.y = 32.0 * (y + 0.5) - (48.0 - 32.0 / 2.0);
         self.anim.frame_interval = 1.0 / 10.0;
         self.moving_target = null;
         self.next_state = null;
@@ -286,7 +290,31 @@ fn handleMoving(self: *Self, moving_target: Coordinate) !void {
                 28 => self.map_data[old_idx] = 29,
                 29 => self.map_data[old_idx] = 28,
                 30 => self.map_data[old_idx] = 31,
-                45 => {},
+                // mirrors
+                45 => self.map_data[old_idx] = 46,
+                46 => self.map_data[old_idx] = 47,
+                47 => self.map_data[old_idx] = 48,
+                48 => self.map_data[old_idx] = 45,
+                // ruby left
+                49 => {
+                    _ = fillLight(self.map_data, old_coord, .left, true);
+                    self.ice_block_coord = null;
+                },
+                // ruby up
+                50 => {
+                    _ = fillLight(self.map_data, old_coord, .up, true);
+                    self.ice_block_coord = null;
+                },
+                // ruby right
+                51 => {
+                    _ = fillLight(self.map_data, old_coord, .right, true);
+                    self.ice_block_coord = null;
+                },
+                // ruby down
+                52 => {
+                    _ = fillLight(self.map_data, old_coord, .down, true);
+                    self.ice_block_coord = null;
+                },
                 else => {},
             }
             switch (self.map_data[new_idx]) {
@@ -349,25 +377,19 @@ fn handleMoving(self: *Self, moving_target: Coordinate) !void {
                         self.map_data[new_idx] = 18;
                     }
                 },
-                // yellow switch
-                38 => {
-                    for (self.map_data, 0..) |item, idx| {
-                        switch (item) {
-                            38 => self.map_data[idx] = 39,
-                            39 => self.map_data[idx] = 38,
-                            40 => self.map_data[idx] = 41,
-                            41 => self.map_data[idx] = 40,
-                            42 => self.map_data[idx] = 43,
-                            43 => self.map_data[idx] = 42,
-                            else => {},
-                        }
-                    }
-                },
-                // flow
-                40 => self.next_state = .left,
-                41 => self.next_state = .right,
-                42 => self.next_state = .up,
-                43 => self.next_state = .down,
+                // full ice ground
+                38 => {},
+                // down ice ground
+                39 => {},
+                // x ice ground
+                40 => {},
+                // up ice ground
+                41 => {},
+                // right ice ground
+                42 => {},
+                // y ice ground
+                43 => {},
+                // end circle
                 44 => {
                     if (self.isFinished()) {
                         self.updateState(.fade_out);
@@ -375,11 +397,109 @@ fn handleMoving(self: *Self, moving_target: Coordinate) !void {
                         try self.sfx_end.start();
                     }
                 },
+                // ruby left
+                49 => self.ice_block_coord = fillLight(self.map_data, self.current_coord, .left, false),
+                // ruby up
+                50 => self.ice_block_coord = fillLight(self.map_data, self.current_coord, .up, false),
+                // ruby right
+                51 => self.ice_block_coord = fillLight(self.map_data, self.current_coord, .right, false),
+                // ruby down
+                52 => self.ice_block_coord = fillLight(self.map_data, self.current_coord, .down, false),
                 else => {},
             }
         }
     }
 }
+
+fn fillLight(map: []u8, start: Coordinate, dir: Direction, clear: bool) ?Coordinate {
+    var coord = start;
+    var direction = dir;
+    while (true) {
+        switch (direction) {
+            // ruby left
+            .left => {
+                if (coord.x == 0) {
+                    return null;
+                }
+                coord.x -= 1;
+            },
+            // ruby up
+            .up => {
+                if (coord.y == 0) {
+                    return null;
+                }
+                coord.y -= 1;
+            },
+            // ruby right
+            .right => {
+                if (coord.x == 15) {
+                    return null;
+                }
+                coord.x += 1;
+            },
+            // ruby down
+            .down => {
+                if (coord.y == 15) {
+                    return null;
+                }
+                coord.y += 1;
+            },
+        }
+
+        const old_direction: Direction = direction;
+        switch (map[coord.index()] & 0b0011_1111) {
+            // stop or change direction at mirrors
+            45 => {
+                switch (direction) {
+                    .left => direction = .down,
+                    .up => direction = .right,
+                    else => return null,
+                }
+            },
+            46 => {
+                switch (direction) {
+                    .right => direction = .down,
+                    .up => direction = .left,
+                    else => return null,
+                }
+            },
+            47 => {
+                switch (direction) {
+                    .down => direction = .left,
+                    .right => direction = .up,
+                    else => return null,
+                }
+            },
+            48 => {
+                switch (direction) {
+                    .down => direction = .right,
+                    .left => direction = .up,
+                    else => return null,
+                }
+            },
+            // stop at ice block
+            59 => return coord,
+            else => {},
+        }
+
+        if (clear) {
+            map[coord.index()] &= 0b0011_1111;
+        } else {
+            const mark: u8 = switch (old_direction) {
+                .up, .down => 0b0100_0000,
+                .left, .right => 0b1000_0000,
+            };
+            map[coord.index()] |= mark;
+        }
+    }
+}
+
+const Direction = enum {
+    left,
+    right,
+    up,
+    down,
+};
 
 const State = enum {
     idle,

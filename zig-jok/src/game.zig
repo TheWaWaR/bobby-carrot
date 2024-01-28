@@ -65,7 +65,7 @@ pub fn init(ctx: jok.Context) !void {
 
 fn updateWindowSize(ctx: jok.Context) void {
     const size = map.windowSize(ctx, full_view);
-    std.log.info("window size: width={}, height={}", .{ size[0], size[1] });
+    // std.log.info("window size: width={}, height={}", .{ size[0], size[1] });
     const width: f32 = @floatFromInt(size[0]);
     const height: f32 = @floatFromInt(size[1]);
     sdl.c.SDL_SetWindowSize(
