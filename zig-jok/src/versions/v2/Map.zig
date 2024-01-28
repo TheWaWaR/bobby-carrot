@@ -276,8 +276,8 @@ pub fn draw(self: *Self, ctx: jok.Context) anyerror!void {
     var icon_width: u32 = undefined;
     var count: usize = undefined;
     count = self.bobby.carrot_total - self.bobby.carrot_count;
-    icon_sprite = self.tile_hud.getSubSprite(0, 0, 46, hud_h);
-    icon_width = 46;
+    icon_sprite = self.tile_hud.getSubSprite(0, 0, 23, hud_h);
+    icon_width = 23;
     const icon_x: u32 = width - icon_width - 4;
     try j2d.sprite(icon_sprite, .{ .pos = .{
         .x = @as(f32, @floatFromInt(icon_x)) - self.x_right_offset,
@@ -291,7 +291,7 @@ pub fn draw(self: *Self, ctx: jok.Context) anyerror!void {
             self.tile_numbers.getSubSprite(@floatFromInt(n * 12), 0, 12, num_h),
             .{ .pos = .{
                 .x = @as(f32, @floatFromInt(icon_x - 2 - 12 * (2 - idx) - 1)) - self.x_right_offset,
-                .y = 4 + 14 + self.y_offset,
+                .y = 4 + 6 + self.y_offset,
             } },
         );
     }
@@ -302,12 +302,14 @@ pub fn draw(self: *Self, ctx: jok.Context) anyerror!void {
         self.bobby.key_yellow,
         self.bobby.key_red,
     }, 0..) |key, idx| {
+        const key_wi: u32 = 15;
+        const key_w: f32 = 15.0;
         if (key > 0) {
             try j2d.sprite(
-                self.tile_hud.getSubSprite(@floatFromInt(122 + idx * 22), 0, 22, 44),
+                self.tile_hud.getSubSprite(@floatFromInt(52 + idx * key_wi), 0, key_w, hud_h),
                 .{ .pos = .{
-                    .x = @as(f32, @floatFromInt(width - 22 - 4 - key_count * 22)) - self.x_right_offset,
-                    .y = 4 + 44 + 2 + self.y_offset,
+                    .x = @as(f32, @floatFromInt(width - key_wi - 4 - key_count * key_wi)) - self.x_right_offset,
+                    .y = 4 + 24 + 2 + self.y_offset,
                 } },
             );
             key_count += 1;
@@ -328,13 +330,15 @@ pub fn draw(self: *Self, ctx: jok.Context) anyerror!void {
         s / 10,
         s % 10,
     }, 0..) |tile_idx, idx| {
-        const w: f32 = if (tile_idx == 10) 5.0 else 12.0;
+        var x = @as(f32, @floatFromInt(4 + 12 * idx)) + self.x_offset;
+        var w: f32 = 12.0;
+        if (tile_idx == 10) {
+            w = 5.0;
+            x += 4.0;
+        }
         try j2d.sprite(
             self.tile_numbers.getSubSprite(@floatFromInt(tile_idx * 12), 0, w, num_h),
-            .{ .pos = .{
-                .x = @as(f32, @floatFromInt(4 + 12 * idx)) + self.x_offset,
-                .y = 4 + self.y_offset,
-            } },
+            .{ .pos = .{ .x = x, .y = 4 + self.y_offset } },
         );
     }
 
