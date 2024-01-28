@@ -280,12 +280,23 @@ pub fn draw(self: *Self, ctx: jok.Context) anyerror!void {
                     48 => 56,
                     else => if (cover == 1) 54 else 53,
                 };
-                const offset_x: f32 = @floatFromInt((laser_item % 8) * 32);
-                const offset_y: f32 = @floatFromInt((laser_item / 8) * 32);
-                try j2d.sprite(
-                    self.tileset.getSubSprite(offset_x, offset_y, 32, 32),
-                    .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 1.0 },
-                );
+                {
+                    const offset_x: f32 = @floatFromInt((laser_item % 8) * 32);
+                    const offset_y: f32 = @floatFromInt((laser_item / 8) * 32);
+                    try j2d.sprite(
+                        self.tileset.getSubSprite(offset_x, offset_y, 32, 32),
+                        .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 1.0 },
+                    );
+                }
+                if (cover == 3) {
+                    const other_laser_item: u8 = if (laser_item == 54) 53 else 54;
+                    const offset_x: f32 = @floatFromInt((other_laser_item % 8) * 32);
+                    const offset_y: f32 = @floatFromInt((other_laser_item / 8) * 32);
+                    try j2d.sprite(
+                        self.tileset.getSubSprite(offset_x, offset_y, 32, 32),
+                        .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 1.0 },
+                    );
+                }
             }
         }
     }
