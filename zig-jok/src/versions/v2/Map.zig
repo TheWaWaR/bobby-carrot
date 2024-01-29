@@ -178,10 +178,10 @@ pub fn updateCamera(self: *Self, ctx: jok.Context, full_view: bool) anyerror!voi
     } else {
         var x: c_int = @intFromFloat(self.bobby.current_pos.x);
         var y: c_int = @intFromFloat(self.bobby.current_pos.y);
-        if (self.bobby.ice_block_coord) |coord| {
+        if (self.bobby.ice_block_laser) |info| {
             // same with bobby coordinate
-            x = @as(c_int, @intCast(coord.x * 32)) + 16 - 18;
-            y = @as(c_int, @intCast(coord.y * 32)) + 16 - (50 - 16);
+            x = @as(c_int, @intCast(info.coord.x * 32)) + 16 - 18;
+            y = @as(c_int, @intCast(info.coord.y * 32)) + 16 - (50 - 16);
         }
         const x_max = @as(c_int, width - view_width);
         const y_max = @as(c_int, height - view_height);

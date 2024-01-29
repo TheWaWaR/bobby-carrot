@@ -13,11 +13,10 @@ state: State,
 next_state: ?State = null,
 start_time: f32,
 last_action_time: f32,
-last_laser_time: ?f32 = null,
 current_pos: sdl.PointF,
 current_coord: Coordinate,
 moving_target: ?Coordinate = null,
-ice_block_coord: ?Coordinate = null,
+ice_block_laser: ?IceBlockLaser = null,
 map_data: []u8,
 carrot_total: usize,
 as: *j2d.AnimationSystem,
@@ -32,7 +31,6 @@ faded_out: bool = false,
 dead: bool = false,
 slip: bool = false,
 
-// TODO: action when melt a ice block
 // TODO: move camera smoothly
 
 pub fn new(
@@ -68,7 +66,7 @@ pub fn event(self: *Self, ctx: jok.Context, e: sdl.Event) !void {
 }
 
 pub fn update(self: *Self, ctx: jok.Context) !bool {
-    if (self.moving_target == null and self.ice_block_coord == null and !self.slip) {
+    if (self.moving_target == null and self.ice_block_laser == null and !self.slip) {
         const state_opt: ?State = if (ctx.isKeyPressed(.left) or ctx.isKeyPressed(.a)) .left // left
         else if (ctx.isKeyPressed(.right) or ctx.isKeyPressed(.d)) .right // right
         else if (ctx.isKeyPressed(.up) or ctx.isKeyPressed(.w)) .up // up
@@ -87,43 +85,37 @@ pub fn update(self: *Self, ctx: jok.Context) !bool {
         self.updateState(.idle);
     }
 
-    const old_ice_block_coord = self.ice_block_coord;
+    const old_ice_block_laser = self.ice_block_laser;
     const old_pos = self.current_pos;
     if (self.next_state) |next_state| {
         self.updateMovingTarget(ctx, next_state);
     }
     if (self.moving_target) |moving_target| {
-        try self.handleMoving(moving_target);
+        try self.handleMoving(ctx, moving_target);
     }
 
-    var ice_block_coord_changed = !std.meta.eql(old_ice_block_coord, self.ice_block_coord);
-    if (ice_block_coord_changed) {
-        if (self.ice_block_coord == null) {
-            self.last_laser_time = null;
-        } else {
-            self.last_laser_time = ctx.seconds();
-        }
-    }
-    if (self.ice_block_coord) |coord| {
-        if (self.last_laser_time) |start| {
-            const delta = ctx.seconds() - start;
-            if (delta > 1.6) {
-                self.map_data[coord.index()] = 63;
-                self.ice_block_coord = null;
-                self.last_laser_time = null;
-                ice_block_coord_changed = true;
-            } else if (delta > 1.2) {
-                self.map_data[coord.index()] = 62;
-            } else if (delta > 0.8) {
-                self.map_data[coord.index()] = 61;
-            } else if (delta > 0.4) {
-                self.map_data[coord.index()] = 60;
-            }
+    var ice_block_laser_changed = !std.meta.eql(old_ice_block_laser, self.ice_block_laser);
+    if (self.ice_block_laser) |info| {
+        const delta = ctx.seconds() - info.start_time;
+        if (delta > 1.6) {
+            const mark: u8 = switch (info.direction) {
+                .up, .down => 0b0100_0000,
+                .left, .right => 0b1000_0000,
+            };
+            self.map_data[info.coord.index()] = 63 | mark;
+            self.ice_block_laser = fillLight(ctx, self.map_data, info.coord, info.direction, false);
+            ice_block_laser_changed = self.ice_block_laser == null;
+        } else if (delta > 1.2) {
+            self.map_data[info.coord.index()] = 62;
+        } else if (delta > 0.8) {
+            self.map_data[info.coord.index()] = 61;
+        } else if (delta > 0.4) {
+            self.map_data[info.coord.index()] = 60;
         }
     }
 
     // change camera position
-    return (ice_block_coord_changed //
+    return (ice_block_laser_changed //
     or !std.meta.eql(old_pos, self.current_pos)) //
     and self.state != .death;
 }
@@ -256,7 +248,7 @@ fn updateMovingTarget(self: *Self, ctx: jok.Context, next_state: State) void {
     }
 }
 
-fn handleMoving(self: *Self, moving_target: Coordinate) !void {
+fn handleMoving(self: *Self, ctx: jok.Context, moving_target: Coordinate) !void {
     const cx: f32 = @floatFromInt(self.current_coord.x);
     const cy: f32 = @floatFromInt(self.current_coord.y);
     const tx: f32 = @floatFromInt(moving_target.x);
@@ -323,23 +315,23 @@ fn handleMoving(self: *Self, moving_target: Coordinate) !void {
                 48 => self.map_data[old_idx] = 45,
                 // ruby left
                 49 => {
-                    _ = fillLight(self.map_data, old_coord, .left, true);
-                    self.ice_block_coord = null;
+                    _ = fillLight(ctx, self.map_data, old_coord, .left, true);
+                    self.ice_block_laser = null;
                 },
                 // ruby up
                 50 => {
-                    _ = fillLight(self.map_data, old_coord, .up, true);
-                    self.ice_block_coord = null;
+                    _ = fillLight(ctx, self.map_data, old_coord, .up, true);
+                    self.ice_block_laser = null;
                 },
                 // ruby right
                 51 => {
-                    _ = fillLight(self.map_data, old_coord, .right, true);
-                    self.ice_block_coord = null;
+                    _ = fillLight(ctx, self.map_data, old_coord, .right, true);
+                    self.ice_block_laser = null;
                 },
                 // ruby down
                 52 => {
-                    _ = fillLight(self.map_data, old_coord, .down, true);
-                    self.ice_block_coord = null;
+                    _ = fillLight(ctx, self.map_data, old_coord, .down, true);
+                    self.ice_block_laser = null;
                 },
                 else => {},
             }
@@ -425,20 +417,26 @@ fn handleMoving(self: *Self, moving_target: Coordinate) !void {
                     }
                 },
                 // ruby left
-                49 => self.ice_block_coord = fillLight(self.map_data, self.current_coord, .left, false),
+                49 => self.ice_block_laser = fillLight(ctx, self.map_data, self.current_coord, .left, false),
                 // ruby up
-                50 => self.ice_block_coord = fillLight(self.map_data, self.current_coord, .up, false),
+                50 => self.ice_block_laser = fillLight(ctx, self.map_data, self.current_coord, .up, false),
                 // ruby right
-                51 => self.ice_block_coord = fillLight(self.map_data, self.current_coord, .right, false),
+                51 => self.ice_block_laser = fillLight(ctx, self.map_data, self.current_coord, .right, false),
                 // ruby down
-                52 => self.ice_block_coord = fillLight(self.map_data, self.current_coord, .down, false),
+                52 => self.ice_block_laser = fillLight(ctx, self.map_data, self.current_coord, .down, false),
                 else => {},
             }
         }
     }
 }
 
-fn fillLight(map: []u8, start: Coordinate, dir: Direction, clear: bool) ?Coordinate {
+fn fillLight(
+    ctx: jok.Context,
+    map: []u8,
+    start: Coordinate,
+    dir: Direction,
+    clear: bool,
+) ?IceBlockLaser {
     var coord = start;
     var direction = dir;
     while (true) {
@@ -507,7 +505,11 @@ fn fillLight(map: []u8, start: Coordinate, dir: Direction, clear: bool) ?Coordin
             // // TODO: stop at ruby
             // 49, 50, 51, 52 => return null,
             // stop at ice block
-            59 => return coord,
+            59 => return .{
+                .coord = coord,
+                .direction = direction,
+                .start_time = ctx.seconds(),
+            },
             else => {},
         }
 
@@ -547,4 +549,10 @@ const Coordinate = struct {
     fn index(coord: Coordinate) usize {
         return coord.x + coord.y * 16;
     }
+};
+
+const IceBlockLaser = struct {
+    coord: Coordinate,
+    direction: Direction,
+    start_time: f32,
 };
