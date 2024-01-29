@@ -335,7 +335,8 @@ fn handleMoving(self: *Self, ctx: jok.Context, moving_target: Coordinate) !void 
                 },
                 else => {},
             }
-            switch (self.map_data[new_idx] & 0b0011_1111) {
+            const new_item: u8 = self.map_data[new_idx] & 0b0011_1111;
+            switch (new_item) {
                 // get carrot
                 19 => {
                     self.map_data[new_idx] = 20;
@@ -405,9 +406,7 @@ fn handleMoving(self: *Self, ctx: jok.Context, moving_target: Coordinate) !void 
                 // up ice ground
                 // right ice ground
                 // y ice ground
-                39, 40, 41, 42, 43 => {
-                    self.slip = false;
-                },
+                39, 40, 41, 42, 43 => {},
                 // end circle
                 44 => {
                     if (self.isFinished()) {
@@ -425,6 +424,9 @@ fn handleMoving(self: *Self, ctx: jok.Context, moving_target: Coordinate) !void 
                 // ruby down
                 52 => self.ice_block_laser = fillLight(ctx, self.map_data, self.current_coord, .down, false),
                 else => {},
+            }
+            if (new_item != 38) {
+                self.slip = false;
             }
         }
     }
