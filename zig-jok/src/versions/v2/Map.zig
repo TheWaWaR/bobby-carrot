@@ -271,6 +271,8 @@ pub fn draw(self: *Self, ctx: jok.Context) anyerror!void {
                     .{ .pos = .{ .x = pos_x, .y = pos_y }, .depth = 1.0 },
                 );
             }
+
+            // Draw laser layer
             const cover: u8 = (byte & 0b1100_0000) >> 6;
             if (cover > 0) {
                 const laser_item: u8 = switch (raw_item) {
@@ -305,8 +307,6 @@ pub fn draw(self: *Self, ctx: jok.Context) anyerror!void {
             anim.update(ctx.deltaSeconds());
         }
     }
-
-    // Draw laser
 
     // Draw indicators
     var icon_sprite: j2d.Sprite = undefined;

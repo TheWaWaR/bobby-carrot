@@ -30,8 +30,8 @@ key_yellow: usize = 0,
 key_red: usize = 0,
 faded_out: bool = false,
 dead: bool = false,
+slip: bool = false,
 
-// TODO: handle ice ground
 // TODO: action when melt a ice block
 // TODO: move camera smoothly
 
@@ -68,7 +68,7 @@ pub fn event(self: *Self, ctx: jok.Context, e: sdl.Event) !void {
 }
 
 pub fn update(self: *Self, ctx: jok.Context) !bool {
-    if (self.moving_target == null and self.ice_block_coord == null) {
+    if (self.moving_target == null and self.ice_block_coord == null and !self.slip) {
         const state_opt: ?State = if (ctx.isKeyPressed(.left) or ctx.isKeyPressed(.a)) .left // left
         else if (ctx.isKeyPressed(.right) or ctx.isKeyPressed(.d)) .right // right
         else if (ctx.isKeyPressed(.up) or ctx.isKeyPressed(.w)) .up // up
@@ -130,7 +130,9 @@ pub fn update(self: *Self, ctx: jok.Context) !bool {
 
 pub fn draw(self: *Self, ctx: jok.Context) !void {
     const sprite = if (self.state == .left or self.state == .right or self.state == .up or self.state == .down) blk: {
-        if (self.moving_target == null) {
+        if (self.slip) {
+            break :blk self.anim.frames[1];
+        } else if (self.moving_target == null) {
             break :blk self.anim.frames[self.anim.frames.len - 1];
         } else {
             const frame = self.anim.getCurrentFrame();
@@ -244,6 +246,7 @@ fn updateMovingTarget(self: *Self, ctx: jok.Context, next_state: State) void {
         or ((old_item == 28) and (state == .up or state == .down)) // forbid: up + down
         or ((old_item == 29) and (state == .left or state == .right)) // forbid: left + right
         ) {
+            self.slip = false;
             self.moving_target = null;
         } else {
             if (new_item == 31) {
@@ -401,17 +404,18 @@ fn handleMoving(self: *Self, moving_target: Coordinate) !void {
                     }
                 },
                 // full ice ground
-                38 => {},
+                38 => {
+                    self.next_state = self.state;
+                    self.slip = true;
+                },
                 // down ice ground
-                39 => {},
                 // x ice ground
-                40 => {},
                 // up ice ground
-                41 => {},
                 // right ice ground
-                42 => {},
                 // y ice ground
-                43 => {},
+                39, 40, 41, 42, 43 => {
+                    self.slip = false;
+                },
                 // end circle
                 44 => {
                     if (self.isFinished()) {
