@@ -88,7 +88,9 @@ pub fn update(self: *Self, ctx: jok.Context) !bool {
     const old_ice_block_laser = self.ice_block_laser;
     const old_pos = self.current_pos;
     if (self.next_state) |next_state| {
-        self.updateMovingTarget(ctx, next_state);
+        if (next_state != .death) {
+            self.updateMovingTarget(ctx, next_state);
+        }
     }
     if (self.moving_target) |moving_target| {
         try self.handleMoving(ctx, moving_target);
@@ -123,6 +125,7 @@ pub fn update(self: *Self, ctx: jok.Context) !bool {
 pub fn draw(self: *Self, ctx: jok.Context) !void {
     const sprite = if (self.state == .left or self.state == .right or self.state == .up or self.state == .down) blk: {
         if (self.slip) {
+            self.anim.update(ctx.deltaSeconds());
             break :blk self.anim.frames[1];
         } else if (self.moving_target == null) {
             break :blk self.anim.frames[self.anim.frames.len - 1];
@@ -179,6 +182,7 @@ fn updateState(self: *Self, state: State) void {
     };
     self.state = state;
     self.anim = self.as.animations.getPtr(name).?;
+    self.anim.reset();
 }
 
 fn updateMovingTarget(self: *Self, ctx: jok.Context, next_state: State) void {
@@ -186,32 +190,21 @@ fn updateMovingTarget(self: *Self, ctx: jok.Context, next_state: State) void {
         const x = self.current_coord.x;
         const y = self.current_coord.y;
         switch (next_state) {
-            .left => {
-                if (x > 0) {
-                    self.moving_target = .{ .x = x - 1, .y = y };
-                    self.updateState(.left);
-                }
+            .left => if (x > 0) {
+                self.moving_target = .{ .x = x - 1, .y = y };
             },
-            .right => {
-                if (x < 15) {
-                    self.moving_target = .{ .x = x + 1, .y = y };
-                    self.updateState(.right);
-                }
+            .right => if (x < 15) {
+                self.moving_target = .{ .x = x + 1, .y = y };
             },
-            .up => {
-                if (y > 0) {
-                    self.moving_target = .{ .x = x, .y = y - 1 };
-                    self.updateState(.up);
-                }
+            .up => if (y > 0) {
+                self.moving_target = .{ .x = x, .y = y - 1 };
             },
-            .down => {
-                if (y < 15) {
-                    self.moving_target = .{ .x = x, .y = y + 1 };
-                    self.updateState(.down);
-                }
+            .down => if (y < 15) {
+                self.moving_target = .{ .x = x, .y = y + 1 };
             },
             else => {},
         }
+        self.updateState(next_state);
         self.next_state = null;
     }
 
@@ -243,6 +236,7 @@ fn updateMovingTarget(self: *Self, ctx: jok.Context, next_state: State) void {
         } else {
             if (new_item == 31) {
                 self.next_state = .death;
+                std.log.info("death", .{});
             }
         }
     }
