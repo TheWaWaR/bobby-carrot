@@ -73,7 +73,7 @@ fn updateWindowSize(ctx: jok.Context, full: bool) !void {
 
 pub fn event(ctx: jok.Context, e: sdl.Event) !void {
     // FIXME: must set window size with full view in init() function
-    if (builtin.os.tag == .linux and !past_first_frame) {
+    if (!past_first_frame) {
         past_first_frame = true;
         try updateWindowSize(ctx, full_view);
         try map.updateCamera(ctx, full_view);
