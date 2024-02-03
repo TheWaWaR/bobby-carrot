@@ -13,10 +13,11 @@ const width_points: u32 = 16;
 const height_points: u32 = 16;
 const view_width_points: u32 = 10;
 const view_height_points: u32 = 12;
-pub const width: u32 = 32 * width_points;
-pub const height: u32 = 32 * height_points;
+const width: u32 = 32 * width_points;
+const height: u32 = 32 * height_points;
 const view_width: u32 = 32 * view_width_points;
 const view_height: u32 = 32 * view_height_points;
+const scale: f32 = if (builtin.os.tag == .linux) 2.0 else 1.0;
 // sprite width
 const sw: f32 = 32;
 // sprite height

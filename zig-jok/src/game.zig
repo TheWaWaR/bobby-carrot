@@ -19,16 +19,11 @@ var map: Map = undefined;
 
 // local variables
 var full_view = false;
+var past_first_frame = false;
 
 // ==== Game Engine variables and functions
 pub const jok_window_title: [:0]const u8 = "Bobby Carrot";
 pub const jok_exit_on_recv_esc = false;
-pub const jok_window_size = jok.config.WindowSize{
-    .custom = .{
-        .width = MapV1.width,
-        .height = MapV1.height,
-    },
-};
 
 pub fn init(ctx: jok.Context) !void {
     std.log.info("game init", .{});
@@ -59,13 +54,13 @@ pub fn init(ctx: jok.Context) !void {
     }
     try map.init(ctx, &sheet, &as, &audio_engine);
 
-    updateWindowSize(ctx);
-    try map.initLevel(ctx, full_view);
+    try updateWindowSize(ctx, true);
+    try map.initLevel(ctx, true);
 }
 
-fn updateWindowSize(ctx: jok.Context) void {
-    const size = map.windowSize(ctx, full_view);
-    // std.log.info("window size: width={}, height={}", .{ size[0], size[1] });
+fn updateWindowSize(ctx: jok.Context, full: bool) !void {
+    const size = map.windowSize(ctx, full);
+    std.log.info("window size: width={}, height={}", .{ size[0], size[1] });
     const width: f32 = @floatFromInt(size[0]);
     const height: f32 = @floatFromInt(size[1]);
     sdl.c.SDL_SetWindowSize(
@@ -73,9 +68,16 @@ fn updateWindowSize(ctx: jok.Context) void {
         @intFromFloat(width * scale),
         @intFromFloat(height * scale),
     );
+    try ctx.renderer().setLogicalSize(@intFromFloat(width), @intFromFloat(height));
 }
 
 pub fn event(ctx: jok.Context, e: sdl.Event) !void {
+    // FIXME: must set window size with full view in init() function
+    if (builtin.os.tag == .linux and !past_first_frame) {
+        past_first_frame = true;
+        try updateWindowSize(ctx, full_view);
+        try map.updateCamera(ctx, full_view);
+    }
     switch (e) {
         .key_up => |key| switch (key.scancode) {
             .q => ctx.kill(),
@@ -83,7 +85,7 @@ pub fn event(ctx: jok.Context, e: sdl.Event) !void {
             .p => try map.prevLevel(ctx, full_view),
             .f => {
                 full_view = !full_view;
-                updateWindowSize(ctx);
+                try updateWindowSize(ctx, full_view);
                 try map.updateCamera(ctx, full_view);
             },
             .r => try map.initLevel(ctx, full_view),
