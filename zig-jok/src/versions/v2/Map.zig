@@ -165,6 +165,10 @@ pub fn windowSize(_: *Self, _: jok.Context, full_view: bool) [2]u32 {
     return size;
 }
 
+pub fn viewOffset(self: *Self) [2]f32 {
+    return .{ self.x_offset, self.y_offset };
+}
+
 pub fn updateCamera(self: *Self, ctx: jok.Context, full_view: bool) anyerror!void {
     if (full_view) {
         try ctx.renderer().setViewport(.{

@@ -23,6 +23,7 @@ pub const VTable = struct {
     deinit: *const fn (self: *anyopaque, ctx: jok.Context) void,
 
     windowSize: *const fn (self: *anyopaque, ctx: jok.Context, full_view: bool) [2]u32,
+    viewOffset: *const fn (self: *anyopaque) [2]f32,
     updateCamera: *const fn (self: *anyopaque, ctx: jok.Context, full_view: bool) anyerror!void,
 
     nextLevel: *const fn (self: *anyopaque, ctx: jok.Context, full_view: bool) anyerror!void,
@@ -50,7 +51,9 @@ pub fn deinit(self: Map, ctx: jok.Context) void {
 pub fn windowSize(self: Map, ctx: jok.Context, full_view: bool) [2]u32 {
     return self.vtable.windowSize(self.ptr, ctx, full_view);
 }
-
+pub fn viewOffset(self: Map) [2]f32 {
+    return self.vtable.viewOffset(self.ptr);
+}
 pub fn updateCamera(self: Map, ctx: jok.Context, full_view: bool) anyerror!void {
     try self.vtable.updateCamera(self.ptr, ctx, full_view);
 }
@@ -104,7 +107,10 @@ pub fn interface(impl_self: anytype) Map {
             const self: Ptr = @ptrCast(@alignCast(ptr));
             return self.windowSize(ctx, full_view);
         }
-
+        pub fn viewOffset(ptr: *anyopaque) [2]f32 {
+            const self: Ptr = @ptrCast(@alignCast(ptr));
+            return self.viewOffset();
+        }
         pub fn updateCamera(ptr: *anyopaque, ctx: jok.Context, full_view: bool) anyerror!void {
             const self: Ptr = @ptrCast(@alignCast(ptr));
             try self.updateCamera(ctx, full_view);
@@ -145,6 +151,7 @@ pub fn interface(impl_self: anytype) Map {
             .init = Impl.init,
             .deinit = Impl.deinit,
             .windowSize = Impl.windowSize,
+            .viewOffset = Impl.viewOffset,
             .updateCamera = Impl.updateCamera,
             .nextLevel = Impl.nextLevel,
             .prevLevel = Impl.prevLevel,

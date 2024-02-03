@@ -4,6 +4,7 @@ const jok = @import("jok");
 const sdl = jok.sdl;
 const j2d = jok.j2d;
 const zaudio = jok.zaudio;
+const font = jok.font;
 const Animation = j2d.AnimationSystem.Animation;
 const Map = @import("Map.zig");
 const MapV1 = @import("versions/v1/Map.zig");
@@ -20,6 +21,7 @@ var map: Map = undefined;
 // local variables
 var full_view = false;
 var past_first_frame = false;
+var show_help = false;
 
 // ==== Game Engine variables and functions
 pub const jok_window_title: [:0]const u8 = "Bobby Carrot";
@@ -60,7 +62,6 @@ pub fn init(ctx: jok.Context) !void {
 
 fn updateWindowSize(ctx: jok.Context, full: bool) !void {
     const size = map.windowSize(ctx, full);
-    std.log.info("window size: width={}, height={}", .{ size[0], size[1] });
     const width: f32 = @floatFromInt(size[0]);
     const height: f32 = @floatFromInt(size[1]);
     sdl.c.SDL_SetWindowSize(
@@ -88,6 +89,7 @@ pub fn event(ctx: jok.Context, e: sdl.Event) !void {
                 try updateWindowSize(ctx, full_view);
                 try map.updateCamera(ctx, full_view);
             },
+            .f1, .h => show_help = !show_help,
             .r => try map.initLevel(ctx, full_view),
             else => {},
         },
@@ -104,6 +106,49 @@ pub fn draw(ctx: jok.Context) !void {
     // your 2d drawing
     try j2d.begin(.{ .depth_sort = .back_to_forth });
     try map.draw(ctx);
+    if (show_help) {
+        const rect_color = sdl.Color.rgba(0xaa, 0xaa, 0xaa, 200);
+        const atlas: *font.Atlas = try font.DebugFont.getAtlas(ctx, 20);
+        const offset = map.viewOffset();
+        const x_offset = 10;
+        const y_offset = 35;
+        var area: sdl.RectangleF = undefined;
+        var max_width: f32 = 0.0;
+        const msgs = .{
+            "F: Toggle full view",
+            "P: Previous level",
+            "N: Next level",
+            "R: Restart level",
+            "Q: Quit the game",
+            "H/F1: Toggle this help",
+        };
+        inline for (msgs, 0..) |msg, i| {
+            const x = offset[0] + x_offset;
+            const y = offset[1] + y_offset + i * 18;
+            const opt = .{
+                .atlas = atlas,
+                .pos = .{ .x = x, .y = y },
+                .ypos_type = .top,
+                .tint_color = sdl.Color.rgb(12, 43, 54),
+                .depth = 0,
+            };
+            try j2d.text(opt, msg, .{});
+            area = try atlas.getBoundingBox(msg, .{ .x = x, .y = y }, .top, .aligned);
+            max_width = @max(max_width, area.width);
+        }
+
+        const margin = 4.0;
+        try j2d.rectFilled(
+            .{
+                .x = offset[0] + x_offset - margin,
+                .y = offset[1] + y_offset - margin,
+                .width = max_width + 2 * margin,
+                .height = area.y + area.height - (offset[1] + y_offset) + 2 * margin,
+            },
+            rect_color,
+            .{ .depth = 0.1 },
+        );
+    }
     try j2d.end();
 }
 
