@@ -56,8 +56,9 @@ pub fn init(ctx: jok.Context) !void {
     }
     try map.init(ctx, &sheet, &as, &audio_engine);
 
-    try updateWindowSize(ctx, true);
-    try map.initLevel(ctx, true);
+    const init_full: bool = if (builtin.os.tag == .linux) true else false;
+    try updateWindowSize(ctx, init_full);
+    try map.initLevel(ctx, init_full);
 }
 
 fn updateWindowSize(ctx: jok.Context, full: bool) !void {
@@ -74,7 +75,7 @@ fn updateWindowSize(ctx: jok.Context, full: bool) !void {
 
 pub fn event(ctx: jok.Context, e: sdl.Event) !void {
     // FIXME: must set window size with full view in init() function
-    if (!past_first_frame) {
+    if (builtin.os.tag == .linux and !past_first_frame) {
         past_first_frame = true;
         try updateWindowSize(ctx, full_view);
         try map.updateCamera(ctx, full_view);
