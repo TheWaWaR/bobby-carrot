@@ -114,7 +114,9 @@ pub fn update(ctx: jok.Context) !void {
 
 pub fn draw(ctx: jok.Context) !void {
     // your 2d drawing
-    try j2d.begin(.{ .depth_sort = .back_to_forth });
+    j2d.begin(.{ .depth_sort = .back_to_forth });
+    defer j2d.end();
+
     try map.draw(ctx);
     if (show_help) {
         const rect_color = sdl.Color.rgba(0xaa, 0xaa, 0xaa, 200);
@@ -159,7 +161,6 @@ pub fn draw(ctx: jok.Context) !void {
             .{ .depth = 0.1 },
         );
     }
-    try j2d.end();
 }
 
 pub fn quit(ctx: jok.Context) void {
