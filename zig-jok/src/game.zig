@@ -22,6 +22,7 @@ var map: Map = undefined;
 var full_view = false;
 var past_first_frame = false;
 var show_help = false;
+var audio_volume: f32 = 0.0;
 
 // ==== Game Engine variables and functions
 pub const jok_window_title: [:0]const u8 = "Bobby Carrot";
@@ -89,6 +90,14 @@ pub fn event(ctx: jok.Context, e: sdl.Event) !void {
                 full_view = !full_view;
                 try updateWindowSize(ctx, full_view);
                 try map.updateCamera(ctx, full_view);
+            },
+            .m => {
+                if (audio_volume > 0.0) {
+                    audio_volume = 0.0;
+                } else {
+                    audio_volume = 1.0;
+                }
+                try audio_engine.setVolume(audio_volume);
             },
             .f1, .h => show_help = !show_help,
             .r => try map.initLevel(ctx, full_view),
