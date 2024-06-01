@@ -19,7 +19,7 @@ var audio_engine: *zaudio.Engine = undefined;
 var map: Map = undefined;
 
 // local variables
-var full_view = false;
+var full_view = true;
 var past_first_frame = false;
 var show_help = false;
 var audio_volume: f32 = 0.0;
@@ -57,7 +57,8 @@ pub fn init(ctx: jok.Context) !void {
     }
     try map.init(ctx, &sheet, &as, &audio_engine);
 
-    const init_full: bool = if (builtin.os.tag == .linux) true else false;
+    // FIXME: fix camera mode
+    const init_full = true;
     try updateWindowSize(ctx, init_full);
     try map.initLevel(ctx, init_full);
 }
@@ -75,12 +76,6 @@ fn updateWindowSize(ctx: jok.Context, full: bool) !void {
 }
 
 pub fn event(ctx: jok.Context, e: sdl.Event) !void {
-    // FIXME: must set window size with full view in init() function
-    if (builtin.os.tag == .linux and !past_first_frame) {
-        past_first_frame = true;
-        try updateWindowSize(ctx, full_view);
-        try map.updateCamera(ctx, full_view);
-    }
     switch (e) {
         .key_up => |key| switch (key.scancode) {
             .q => ctx.kill(),
